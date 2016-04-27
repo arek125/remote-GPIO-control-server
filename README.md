@@ -1,5 +1,5 @@
 # Remote GPIO control server
-Application allows you to control GPIO ports on Pi devices via [android application client](https://play.google.com/store/apps/details?id=com.rgc).
+Application allows you to control GPIO port on Pi devices via [android application client](https://play.google.com/store/apps/details?id=com.rgc).
 
 ## Installation
 ```bash
