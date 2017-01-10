@@ -19,7 +19,7 @@ For autostart add above to file:
 /etc/rc.local
 ```
 
-Keep time on server and client synchronized (diffrent timezones are suported).
+Keep time on server and client synchronized (diffrent timezones are supported).
 
 
 ## License
