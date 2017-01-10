@@ -1,0 +1,9 @@
+1.1
+-added new tab witch will show history log of last performend actions (columns: switchname, state, timestamp, client phone name etc.)
+-tabs are now selectable
+-connection error handling improve (errors are now logged - long click on refresh button to see)
+-added new option to output buton to act like pushbutton (state change on hold and restored when release) insted of on/off switch
+-added new input bind type - option to bind output as pushbutton insted of on/off switch
+-difrent timezones on server and client are now supported
+-added client and server code version control
+-other small bug fixes
