@@ -1,0 +1,13 @@
+[Unit]
+Description=Remote GPIO Control Server
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python rgc-server.py
+Restart=on-abort
+WorkingDirectory=/home/pi
+
+[Install]
+WantedBy=multi-user.target
+
