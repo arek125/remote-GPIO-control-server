@@ -23,7 +23,7 @@ Main features:
 ### Download and unpack last release 
 ```bash
 wget https://github.com/arek125/remote-GPIO-control-server/releases/download/2.1/rgc-server.tar.gz
-tar -zxvf file.tar.gz
+tar -zxvf rgc-server.tar.gz
 cd rgc
 ```
 ### Run instalation script
