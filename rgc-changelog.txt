@@ -1,0 +1,16 @@
+2.1
+- built in web client added
+- tcp only option for android
+- ping trigger added
+- old scheduled actions removed
+- bug fixes
+2.0
+- reworked and improved connection, now it's multithreded server UDP(for small data)/TCP(for large data)
+- server now runs as a service of systemd
+Added:
+- Execution chains // allows to create chains from bonds output/pwm/conditional that will be run with one by one with defined daley
+- Advenced sheduled action // more enhanced version of previous functionality with posibility to set multiple trigers and conjunction
+- Sensors // easy read/store data from sensors: DS18B20, DHT*, TSL2561
+- Notifications // settup notification base on output/input status or sensor value
+- ON/OFF Widget // change output state from android home screen
+- Other smaller fixes and improvments

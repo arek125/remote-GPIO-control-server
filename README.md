@@ -1,12 +1,29 @@
 # Remote GPIO control server
-Application allows you to control GPIO port on Pi devices via [android application client](https://play.google.com/store/apps/details?id=com.rgc).
+Application allows you to control GPIO port on Pi devices via [android application client](https://play.google.com/store/apps/details?id=com.rgc) or biuld in www client.
 
+Main features:
+- Control the states of output pins
+- Read the states of input pins and bind them with outputs
+- Control PWM output pins
+- Create sequential execution chains
+- Read/store data from sensors DS18B20, DHT*, TSL2561
+- Setup android notification base on output/input status or sensor value
+- Plan output/pwm/chain state changes with multiple trigers 
+<details><summary>Web client preview</summary>
+
+![](webpreview.gif)
+</details>
+
+<details><summary>Android client preview</summary>
+
+![](androidpreview.gif)
+</details>
 
 ## Installation
 ### Download and unpack last release 
 ```bash
-wget https://github.com/arek125/remote-GPIO-control-server/releases/download/2.0/rgc-server.tar.gz
-tar -zxvf rgc-server.tar.gz
+wget https://github.com/arek125/remote-GPIO-control-server/releases/download/2.1/rgc-server.tar.gz
+tar -zxvf file.tar.gz
 cd rgc
 ```
 ### Run instalation script
@@ -26,7 +43,9 @@ ExecStart=/usr/bin/python rgc-server.py -port 8889 -password Password123
 ```
 Available parameters:
 ```bash
--port <port number> #for tcp/udp connection, default is 8888
+-mode <wwwOnly or mobileOnly># to limit mode, by default both modes are on
+-wwwport <port number> #website port, default is 80
+-mobileport <port number> #for tcp/udp mobile connection, default is 8888
 -password <password string> #for encryprion,if this parameter is not set encrypted communication is disabled
 -debug #for debugging purposes
 -db_path <database file path string> #to set diffrent database file path
@@ -54,8 +73,16 @@ journalctl -u rgc.service # to see logs in case of problems
 ```
 
 ## Support
-Application tested on Raspberry pi devices with Raspiain OS.
-Should work on similar devices/OS's but it requires a library [RPi.GPIO](https://pypi.python.org/pypi/RPi.GPIO) 0.6.2 or later (Raspbian OS already has it).
+Tested and working on Raspberry Pi devices with Raspiain OS.
+
+Tested and working with Banana Pi devices with [this](https://github.com/BPI-SINOVOIP/RPi.GPIO) library.
+
+Tested and working with Orange Pi Zero devices with [this](https://opi-gpio.readthedocs.io/en/latest/index.html) library.
+(Import replacement from "import RPi.GPIO as GPIO" to "import OPi.GPIO as GPIO"  in file rgc-server.py is necessary)
+
+Should work on similar devices/OS's but it requires a library [RPi.GPIO](https://pypi.python.org/pypi/RPi.GPIO) (Raspbian OS already has it) or another based on it. 
+
+
 
 ## License
 Remote GPIO control server is available under the [MIT license](http://opensource.org/licenses/MIT).
@@ -63,4 +90,4 @@ Remote GPIO control server is available under the [MIT license](http://opensourc
 ## Donation
 If you like this project please consider a donation:
 
-[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=arek125%40gmail%2ecom&lc=PL&item_name=RGC%20FAMILY&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest)
+[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](arek125@gmail.com)
