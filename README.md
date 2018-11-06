@@ -1,5 +1,5 @@
 # Remote GPIO control server
-Application allows you to control GPIO port on Pi devices via [android application client](https://play.google.com/store/apps/details?id=com.rgc) or biuld in www client.
+Application allows you to control GPIO port on Pi devices via [android application client](https://play.google.com/store/apps/details?id=com.rgc) or build in www client.
 
 Main features:
 - Control the states of output pins
