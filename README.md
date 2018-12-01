@@ -90,4 +90,4 @@ Remote GPIO control server is available under the [MIT license](http://opensourc
 ## Donation
 If you like this project please consider a donation:
 
-[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](arek125@gmail.com)
+[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/donate/?token=nr84X4oJcJ5VP7xxsNfjN09G1NGwISNjrgsRcQ7U5ecM4wBN-45aoASZQbBUA6bJ9Ecssm&country.x=PL&locale.x=PL)
