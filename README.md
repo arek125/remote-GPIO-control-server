@@ -3,12 +3,18 @@ Application allows you to control GPIO port on Pi devices via [android applicati
 
 Main features:
 - Control the states of output pins
-- Read the states of input pins and bind them with outputs
-- Control PWM output pins
-- Create sequential execution chains
-- Read/store data from sensors DS18B20, DHT*, TSL2561
+- Read the states of input pins
+- Control software PWM output pins
+- Link multiple pi devices
+- Create sequential execution chains through all linked pi devices
+- Define and run custom shell commands
+- Read/store data from sensors 
+    - build in support for (temperature DS18B20, temperature and humidity DHT*,Luminosity Sensor TSL2561, Rotary encoder KY040, Range sensor HC-SR04)
+    - custom sensor (create own script to return value)
+- Transmit or recive radio frequency codes with generic low-cost GPIO RF modules
+- Create automated actions to change output/pwm, execude chain sequence, transmit RF or run custom command, such actions can have multiple triggers through all linked pi devices with custom conjunction
+- Create android desktop widget for fast output change, read sensors value or execude chain sequence
 - Setup android notification base on output/input status or sensor value
-- Plan output/pwm/chain state changes with multiple trigers 
 <details><summary>Web client preview</summary>
 
 ![](webpreview.gif)
@@ -26,37 +32,36 @@ wget https://github.com/arek125/remote-GPIO-control-server/releases/download/2.1
 tar -zxvf rgc-server.tar.gz
 cd rgc
 ```
-### Run instalation script
+### Install necessary packages
+```bash
+sudo apt-get update
+sudo apt-get install python-dev python-crypto python-systemd python-pip postgresql libpq-dev postgresql-client 
+sudo pip install psycopg2 psutil
+```
+
+### Create postgresql user and database
+```bash
+sudo su postgres
+createuser pi -P --interactive # set super user to yes
+psql
+CREATE DATABASE db_rgc;
+#Ctrl+D 
+#Ctrl+D 
+```
+
+### Create systemd service
 ```bash
 sudo chmod 644 rgc-setup.sh
 sudo bash rgc-setup.sh
 ```
 
-### Set startup parameters data
-Modify service file:
+### Configure server config
 ```bash
-sudo nano /lib/systemd/system/rgc.service
-```
-In line 'ExecStart' set parametrs (e.g):
-```bash
-ExecStart=/usr/bin/python rgc-server.py -port 8889 -password Password123
-```
-Available parameters:
-```bash
--mode <wwwOnly or mobileOnly># to limit mode, by default both modes are on
--wwwport <port number> #website port, default is 80
--mobileport <port number> #for tcp/udp mobile connection, default is 8888
--password <password string> #for encryprion,if this parameter is not set encrypted communication is disabled
--debug #for debugging purposes
--db_path <database file path string> #to set diffrent database file path
--ds18b20 #to enalbe ds18b20 sensors support all connected to 1wire, see md file for instalation instructions
--dht <11 or 22 or AM2302> <GPIO BCM PIN number> #to enalbe dht* sensor support, see md file for instalation instructions
--tsl2561 <gain from 1-16 or 0 for auto gain> #to enalbe tsl2561 sensor support, see md file for instalation instructions
+sudo nano rgc-config.ini # configure sql connection there and any other parameters as neded
 ```
 
-After parameters are changed call:
+Every time when above config is changed run:
 ```bash
-sudo systemctl daemon-reload
 sudo systemctl restart rgc.service
 ```
 
@@ -90,4 +95,4 @@ Remote GPIO control server is available under the [MIT license](http://opensourc
 ## Donation
 If you like this project please consider a donation:
 
-[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=arek125%40gmail%2ecom&lc=PL&item_name=RGC%20FAMILY&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest)
+[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](arek125@gmail.com)
