@@ -9,9 +9,9 @@ Main features:
 - Create sequential execution chains through all linked pi devices
 - Define and run custom shell commands
 - Read/store data from sensors 
-    - build in support for (temperature DS18B20, temperature and humidity DHT*,Luminosity Sensor TSL2561, Rotary encoder KY040, Range sensor HC-SR04)
+    - build in support for [temperature DS18B20](DS18B20.md), [temperature and humidity DHT](DHT.md)*, [Luminosity Sensor TSL2561](TSL2561.md), [Rotary encoder KY040](Rotary%20encoder.md), [Range sensor HC-SR04](Range%20sensor.md)
     - custom sensor (create own script to return value)
-- Transmit or recive radio frequency codes with generic low-cost GPIO RF modules
+- Transmit or recive radio frequency codes with generic low-cost GPIO [RF modules](RF.md)
 - Create automated actions to change output/pwm, execude chain sequence, transmit RF or run custom command, such actions can have multiple triggers through all linked pi devices with custom conjunction
 - Create android desktop widget for fast output change, read sensors value or execude chain sequence
 - Setup android notification base on output/input status or sensor value
