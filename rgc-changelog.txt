@@ -1,3 +1,27 @@
+3.0 
+Update from prevoius versions not posible ! Check install instructions !
+- sqlite db changed to postgresql
+- config/startup parameters are set now via config file (rgc-config.ini)
+- radio frequency support // 433/315Mhz cheap modules can be used to transmit or recive codes, web client have option to sniff codes
+- custom shell commands // allows to run own script or bash command from clients
+- linked pi's // allows to link multiple pi devices
+- sensors:
+    - rotary encoder and range sensor support added // both configurable in rgc-config.ini
+    - custom sensor definition // allows to create custom sensor based on own script (script must return/print numeric value)
+    - android widget added
+- advenced sheduled actions renamed to automation and enhanced:
+    - single action creates system process and runs indepedently, with use of all cpu cores
+    - posibility to transmit rf code or run custom command on triggers conditions met
+    - configurable triggers check refresh rate // how often triggers condition will be checked (in seconds or fraction of second)
+    - new triggers types: RF recive, cmd output, linked pi(i/o state / sensor value / rf recive)
+- chains:
+    - posibility to create bonds based of linked pi
+    - android widget added
+- gpio inputs:
+    - enhanced to use less cpu power
+    - binding options removed // same thing can now be done with automation action
+
+
 2.1
 - built in web client added
 - tcp only option for android
