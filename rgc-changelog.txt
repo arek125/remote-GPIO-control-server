@@ -1,3 +1,9 @@
+3.0.1
+- chains:
+	- can now be run in limited or unlimited loop
+	- can now be run as bond of other chain
+- bug fixes
+
 3.0 
 Update from prevoius versions not posible ! Check install instructions !
 - sqlite db changed to postgresql
