@@ -1,0 +1,10 @@
+.navbar-brand {
+    float: right;
+    background-repeat: no-repeat;
+    text-indent: -9999px;
+    background-image: url(/img/logo.png);
+    white-space: nowrap;
+    width: 50px;
+    outline: none;
+    margin-top: 1px;
+}

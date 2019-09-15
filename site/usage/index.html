@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <meta name="author" content="Arek Goleń">
+    
+    <link rel="../img/favicon.ico">
+
+    
+    <title>Usage - Remote GPIO control</title>
+    
+
+    <link rel="stylesheet" href="//use.fontawesome.com/releases/v5.5.0/css/all.css" integrity="sha384-B4dIYHKNBt8Bc12p+WXckhzcICo0wtJAoU8YZTY5qE0Id1GSseTk6S+L3BlXeVIU" crossorigin="anonymous">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
+    <link href='//fonts.googleapis.com/css?family=PT+Sans:400,400italic,700,700italic&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+    <link href="../css/base.min.css" rel="stylesheet">
+    <link href="../css/cinder.min.css" rel="stylesheet">
+    <link href="../css/highlight.min.css" rel="stylesheet">
+    <link href="../css/extra.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+            <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+        <![endif]-->
+
+    <script src="//ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>
+    <script>
+    WebFont.load({
+        google: {
+            families: ['Open Sans', 'PT Sans']
+        }
+    });
+    </script>
+
+    
+
+     
+</head>
+
+<body>
+
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+
+            <a class="navbar-brand" href="..">Remote GPIO control</a>
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li >
+                        <a href="..">Home</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../instalation/">Installation</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="../serverConfig/">Config</a>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Sensors <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../DS18B20/">Temperature DS18B20</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../DHT/">Temperature and humidity DHT*</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../TSL2561/">Luminosity Sensor TSL2561</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../Rotary encoder/">Rotary encoder KY040</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../Range sensor/">Range sensor HC-SR04</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../RF/">RF 433/315Mhz modules</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="active">
+                        <a href="./">Usage</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="https://github.com/arek125/remote-GPIO-control-server/releases">Releases</a>
+                    </li>
+                
+                
+                
+                    <li >
+                        <a href="https://github.com/arek125/remote-GPIO-control-server/issues?utf8=%E2%9C%93&q=">Issues</a>
+                    </li>
+                
+                
+                </ul>
+
+            <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                            <i class="fas fa-search"></i> Search
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../RF/">
+                            <i class="fas fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li class="disabled">
+                        <a rel="next" >
+                            Next <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/arek125/remote-GPIO-control-server/edit/master/docs/usage.md"><i class="fab fa-github"></i> Edit on GitHub</a>
+                    </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+        
+        
+        <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="first-level active"><a href="#web-client">Web Client</a></li>
+            <li class="second-level"><a href="#gpio-outputs">GPIO Outputs</a></li>
+                
+            <li class="second-level"><a href="#gpio-inputs">GPIO Inputs</a></li>
+                
+            <li class="second-level"><a href="#software-pwm-outputs">Software PWM Outputs</a></li>
+                
+            <li class="second-level"><a href="#custom-shell-commands">Custom shell commands</a></li>
+                
+            <li class="second-level"><a href="#sensors">Sensors</a></li>
+                
+            <li class="second-level"><a href="#radio-frequency-transmitrecive-codes">Radio frequency Transmit/Recive Codes</a></li>
+                
+                <li class="third-level"><a href="#sniffer">Sniffer</a></li>
+            <li class="second-level"><a href="#linked-pis">Linked PI's</a></li>
+                
+            <li class="second-level"><a href="#chain-sequences">Chain sequences</a></li>
+                
+                <li class="third-level"><a href="#bonds">Bonds</a></li>
+                <li class="third-level"><a href="#example-1-blinking-led-and-buzzer">Example 1 - Blinking led and buzzer</a></li>
+            <li class="second-level"><a href="#automated-actions">Automated actions</a></li>
+                
+                <li class="third-level"><a href="#triggers">Triggers</a></li>
+                <li class="third-level"><a href="#conjunction-pattern">Conjunction pattern</a></li>
+                <li class="third-level"><a href="#example-1-alarm-when-smoke-detected">Example 1 - Alarm when smoke detected</a></li>
+        <li class="first-level "><a href="#android-client">Android Client</a></li>
+            <li class="second-level"><a href="#connection">Connection</a></li>
+                
+            <li class="second-level"><a href="#widgets">Widgets</a></li>
+                
+            <li class="second-level"><a href="#notifications">Notifications</a></li>
+                
+                <li class="third-level"><a href="#example-1-notification-when-smoke-detected">Example 1 - Notification when smoke detected</a></li>
+    </ul>
+</div></div>
+        <div class="col-md-9" role="main">
+
+<h1 id="web-client">Web Client</h1>
+<h2 id="gpio-outputs">GPIO Outputs</h2>
+<p><img alt="" src="../img/outputspreview.gif" />
+Example with led and buzzer connected.</p>
+<p>Control GPIO outputs by setting state at LOW or HIGH.</p>
+<p>Multiple pins can be used as one tile.
+<details><summary>BCM Pinout</summary><img alt="" src="../img/header_pinout.jpg" /></details></p>
+<p>With reverse checkbox, colors of button can be reversed for LOW/HIGH state.</p>
+<p>Tiles can be defined to act like:</p>
+<ul>
+<li>on/off switch (click will turn in on and next click will turn it off)</li>
+<li>pushbutton (click and hold will turn in on and release will turn it off)</li>
+</ul>
+<h2 id="gpio-inputs">GPIO Inputs</h2>
+<p><img alt="" src="../img/inputspreview.gif" />
+Example with hardware pushbutton:
+<img alt="" src="../img/pushbutton.jpg" /></p>
+<p>Read GPIO inputs state by color.</p>
+<p>Single pin can be used for one tile.
+<details><summary>BCM Pinout</summary><img alt="" src="../img/header_pinout.jpg" /></details></p>
+<p>With reverse checkbox, colors of button can be reversed for LOW/HIGH state.</p>
+<h2 id="software-pwm-outputs">Software PWM Outputs</h2>
+<p><img alt="" src="../img/pwmspreview.gif" />
+Example with servo connected.</p>
+<p>Control Software PWM Outputs by turning PWM on or off, when turned on control frequency and duty cycle.</p>
+<p>Multiple pins can be used as one tile.
+<details><summary>BCM Pinout</summary><img alt="" src="../img/header_pinout.jpg" /></details></p>
+<p>With reverse checkbox, duty cycle slider can be placed up side down.</p>
+<h2 id="custom-shell-commands">Custom shell commands</h2>
+<p><img alt="" src="../img/cmdspreview.gif" />
+Example with python file:</p>
+<pre><code class="python">import random
+print random.randint(1,101)
+</code></pre>
+
+<p>Execute custom shell commands, this can be bash command or execution of script file in any language.
+Result will be saved according to what script/command print/return.</p>
+<p>With wait checkbox checked client will wait (in the same thread as execution) for result and print it, otherwise seperate thread will be created.</p>
+<h2 id="sensors">Sensors</h2>
+<p><img alt="" src="../img/sensorspreview.gif" />
+Example with DHT11, range and custom sensor.</p>
+<p>Read predefined in <a href="../serverConfig/">config</a> or custom sensors values.</p>
+<p>If sensor is correctly defined in config and connected it will be automaticly listed here.</p>
+<p>Custom sensor can be defined here.</p>
+<p>Options:</p>
+<ul>
+<li>History save interval (seconds) - Defines how often the data from the sensor are to be save</li>
+<li>History range back (days) - Defines how big sensor log can be</li>
+</ul>
+<p>For custom only:</p>
+<ul>
+<li>The unit will be displayed next to the value</li>
+<li>Gpio BCM (if custom sensor uses), it will prevent for that pins to used in other cases</li>
+<li>Data name - for info only</li>
+<li>Data source - it must be early defined with custom shell command (single execution must return only numeric value)</li>
+</ul>
+<p>By selecting each sensors, values will be compared on chart.</p>
+<h2 id="radio-frequency-transmitrecive-codes">Radio frequency Transmit/Recive Codes</h2>
+<p>At least one module must be <a href="../RF/">connected</a> and <a href="../serverConfig/">configured</a> for this to work.</p>
+<p>Each configured tile is seperate code for recive or transmit.</p>
+<p>If code recive is detected it will be displayed in history, to transmit code click on configured tile.</p>
+<p><img alt="" src="../img/rfPreview.gif" />
+<img alt="" src="../img/rfPreview.jpg" /></p>
+<h3 id="sniffer">Sniffer</h3>
+<p>It can be used to sniff all transmited codes in area.</p>
+<p>I push buttons in rf remote in below gif.</p>
+<p><img alt="" src="../img/snifferPreview.gif" /></p>
+<h2 id="linked-pis">Linked PI's</h2>
+<p>Link multiple pi devices (with rgc setup), this can be used for chains execution a cross them, or automation.</p>
+<p>Both connections type (www or mobile) are supported.</p>
+<h2 id="chain-sequences">Chain sequences</h2>
+<p>Runs multiple actions(bonds) one by one with one click. Built sequence can be runned multiple times afer execution (Loop countdown), if value there is -1 then sequence will be repeted until cancelation. </p>
+<p>With &lt;&gt; icon execution order of bonds can be changed.</p>
+<h3 id="bonds">Bonds</h3>
+<p>To use specific bond type, source must be first configured in separate tab or in linked device.</p>
+<p>Bonds(actions) types:</p>
+<ul>
+<li>Output - to change GPIO output state</li>
+<li>PWM - to disalbe/enable, set DC, set Frequency of soft. PWM</li>
+<li>Automated action - to trigger conditions check of configured automated action, if conditions are met then action will run</li>
+<li>Transmit Radio Frequency code </li>
+<li>Execude custom command</li>
+<li>Execude or cancel other chain</li>
+</ul>
+<p>Each execution can be daleyed with specific time (seconds)</p>
+<p>All actions can be runned on selected linked device, device must be online and rgc app active in time of configurtion and chain execution.</p>
+<h3 id="example-1-blinking-led-and-buzzer">Example 1 - Blinking led and buzzer</h3>
+<p><img alt="" src="../img/chainspreview.gif" /></p>
+<p>Example sets on and off early configured GPIO output until will be canceled.</p>
+<h2 id="automated-actions">Automated actions</h2>
+<p>Configured action start automaticly when conditions(triggers) are met.</p>
+<p>To use specific action type, source must be first configured in separate tab.</p>
+<p>Actions types:</p>
+<ul>
+<li>Output - to change GPIO output state</li>
+<li>PWM - to disalbe/enable, set DC, set Frequency of soft. PWM</li>
+<li>Transmit Radio Frequency code </li>
+<li>Execude custom command</li>
+<li>Execude or cancel other chain</li>
+</ul>
+<p>Number of executions can be limited by any number, -1 - unlimited.</p>
+<p>Checkbox keep logs - if checked executed action will be saved in history log.</p>
+<p>Triggers(conditions) will be checked every x seconds configured in "Thread refresh rate". By defult its 0,3s, you can increase this value if such reaction is not needed or if cpu usage is high.</p>
+<h3 id="triggers">Triggers</h3>
+<p>To use specific trigger, source must be first configured in separate tab or in linked device.</p>
+<p>Triggers types:</p>
+<ul>
+<li>Exact date time</li>
+<li>Time of day</li>
+<li>Timer</li>
+<li>Week day</li>
+<li>Sensor value</li>
+<li>Input/Output state</li>
+<li>PWM state</li>
+<li>PWM frequency</li>
+<li>PWM dutycycle</li>
+<li>Run only in chain (if action will be used in chain sequence execution)</li>
+<li>Ping</li>
+<li>Recive RF</li>
+<li>Custom command output</li>
+<li>Linked Input/Output state</li>
+<li>Linked Sensor value</li>
+<li>Linked Recive RF</li>
+</ul>
+<p>Most triggers types have configurable operator, example of use can be sensor value to trigger action when selected sensor value is bigger then 20 (eg. Sensor value &gt; 20).</p>
+<h3 id="conjunction-pattern">Conjunction pattern</h3>
+<p>If there is more then one trigger per action, conjunction pattern can be set. </p>
+<p>By default all triggers conditions must be fulfilled in the same time for action to run. ('#1# and #2#' etc.)</p>
+<p>Each trigger is a number in pattern (#trigger number#), we can use python conjunction syntax to enter patten of our own. </p>
+<p>For example we have three triggers and we want to run action if at least one of them is activeted then pattern will be: #1# or #2# or #3#</p>
+<h3 id="example-1-alarm-when-smoke-detected">Example 1 - Alarm when smoke detected</h3>
+<p><img alt="" src="../img/automationpreview.gif" /></p>
+<p>Alarm (early configured chain of blinking led and buzzer) will go on when smoke sensor (confugired on second linked pi device) change state. </p>
+<p>Action is also limited to run only beetwen 2:00 and 9:00 o'clock.</p>
+<h1 id="android-client">Android Client</h1>
+<h2 id="connection">Connection</h2>
+<p>To connect to the server, connection must be first configured.</p>
+<p><img alt="" src="../img/androidConn.jpg" /></p>
+<p>Make sure that address and port of the server are accesable from network witch phone is connected !</p>
+<h2 id="widgets">Widgets</h2>
+<p>Avalible widgets are:</p>
+<ul>
+<li>On/off GPIO output switcher</li>
+<li>Sensors reader</li>
+<li>Chains sequence executioner</li>
+</ul>
+<p><img alt="" src="../img/widgetsPreview.gif" /></p>
+<h2 id="notifications">Notifications</h2>
+<p>Android client can push notification when:</p>
+<ul>
+<li>GPIO output or input change state</li>
+<li>Sensor reach configured value</li>
+</ul>
+<p>When 'precise' checkbox is checked, condition will alwes be cheked every interval(field) seconds. (This option can drain battery beceause phone can never enter to sleep mode). Without it condition will be checked as others aplications (15min/30min/12h/24h).</p>
+<h3 id="example-1-notification-when-smoke-detected">Example 1 - Notification when smoke detected</h3>
+<p>Android will notify if smoke(GPIO Input) is detected, with this configuration delay is max 15min.</p>
+<p><img alt="" src="../img/notifPreview.gif" /></p></div>
+        
+        
+    </div>
+
+    <footer class="col-md-12 text-center">
+        
+        <hr>
+        <p>
+        <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</p></small>
+
+        
+        
+    </footer>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="../js/bootstrap-3.0.3.min.js"></script>
+    <script src="../js/highlight.pack.js"></script>
+    <script>hljs.initHighlightingOnLoad();</script>
+    <script>var base_url = ".."</script>
+    
+    <script src="../js/base.js"></script>
+    <script src="../search/main.js"></script>
+
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+    </body>
+
+</html>

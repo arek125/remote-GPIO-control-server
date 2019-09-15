@@ -1,0 +1,20 @@
+site_name: Remote GPIO control
+site_author: "Arek Goleń"
+theme: cinder
+repo_url: https://github.com/arek125/remote-GPIO-control-server
+extra_css:
+    - css/extra.css
+nav:
+    - Home: index.md
+    - Installation: instalation.md
+    - Config: serverConfig.md
+    - Sensors: 
+      - Temperature DS18B20: DS18B20.md
+      - Temperature and humidity DHT*: DHT.md
+      - Luminosity Sensor TSL2561: TSL2561.md
+      - Rotary encoder KY040: Rotary encoder.md
+      - Range sensor HC-SR04: Range sensor.md
+      - RF 433/315Mhz modules: RF.md
+    - Usage: usage.md
+    - Releases: https://github.com/arek125/remote-GPIO-control-server/releases
+    - Issues: https://github.com/arek125/remote-GPIO-control-server/issues?utf8=%E2%9C%93&q=
