@@ -403,6 +403,7 @@ def inputLoop(id, inpin, Stan, reverse):
     id2 = int(id)
     Stan = int(Stan)
     GPIO.setup(inpin, GPIO.IN, GPIO.PUD_UP)
+    global break_
     if Stan == 0: stan = 2
     elif Stan == 1: stan = 4
     else: stan = 2
@@ -472,6 +473,7 @@ def requestMethod(data):
     datalist = data.split(";")
     passwalidation = False
     httpCode = 200
+    global break_
     if PASSWORD == '':
         passwalidation = True
     else:
@@ -496,7 +498,7 @@ def requestMethod(data):
             for row in conndb.fetchall():
                 reply = 'true;GPIO_OEtime;'+str(row[0])+';'
         elif datalist[1] == 'GPIO_Olist':
-            cursor = conndb.execute("SELECT * from stany where IN_OUT like 'out'")
+            cursor = conndb.execute("SELECT * from stany where IN_OUT like 'out' ORDER BY Id DESC")
             reply = 'true;GPIO_Olist;'
             for row in conndb.fetchall():
                 reply += str(row[0])+';'+str(row[1])+';'+str(row[2]) +';'+str(row[3])+';'+str(row[6])+';'+str(row[8])+';'
@@ -505,7 +507,7 @@ def requestMethod(data):
             row = conndb.fetchone()
             reply = 'true;Get_GPIO;'+";".join(map(str, row))+";"
         elif datalist[1] == 'GPIO_OlistT0':
-            cursor = conndb.execute("SELECT * from stany where IN_OUT like 'out' AND Bindtype = 0")
+            cursor = conndb.execute("SELECT * from stany where IN_OUT like 'out' AND Bindtype = 0 ORDER BY Id DESC")
             reply = 'true;GPIO_OlistT0;'
             for row in conndb.fetchall():
                 reply += str(row[0])+';'+str(row[1])+';'+str(row[2])+';'+str(row[3])+';'+str(row[6])+';'+str(row[8])+';'
@@ -549,7 +551,7 @@ def requestMethod(data):
             for row in conndb.fetchall():
                 reply = 'true;GPIO_IEtime;'+str(row[0])+';'
         elif datalist[1] == 'GPIO_Ilist':
-            cursor = conndb.execute("SELECT * from stany where IN_OUT like 'in'")
+            cursor = conndb.execute("SELECT * from stany where IN_OUT like 'in' ORDER BY Id DESC")
             reply = 'true;GPIO_Ilist;'
             for row in conndb.fetchall():
                 reply += str(row[0])+';'+str(row[1])+';'+str(row[2])+';'+str(row[3])+';'+str(row[6])+';'+str(row[7])+';'+str(row[8])+';'
@@ -571,7 +573,7 @@ def requestMethod(data):
             threading.Thread(target=inputLoop, args=(id, datalist[3], '0', datalist[6])).start()
             reply = 'true;Edit_GPIO_in;'
         elif datalist[1] == 'GPIO_Oname':
-            cursor = conndb.execute("SELECT Id,Name,GPIO_BCM,Reverse from stany where IN_OUT like 'out'")
+            cursor = conndb.execute("SELECT Id,Name,GPIO_BCM,Reverse from stany where IN_OUT like 'out' ORDER BY Id DESC")
             reply = 'true;GPIO_Oname;'
             for row in conndb.fetchall():
                 reply += str(row[0])+';'+str(row[1]) +';'+str(row[2])+';'+str(row[3])+';'
@@ -580,7 +582,7 @@ def requestMethod(data):
             for row in conndb.fetchall():
                 reply = 'true;GPIO_PEtime;'+str(row[0])+';'
         elif datalist[1] == 'GPIO_Plist':
-            cursor = conndb.execute("SELECT * from pwm")
+            cursor = conndb.execute("SELECT * from pwm ORDER BY Id DESC")
             reply = 'true;GPIO_Plist;'
             for row in conndb.fetchall():
                 reply += str(row[0])+';'+str(row[1])+';'+str(row[2])+';'+str(row[3])+';'+str(row[4])+';'+str(row[5])+';'+str(row[6])+';'
@@ -729,7 +731,7 @@ def requestMethod(data):
             else: reply = 'true;SENSOR_value;'+str(value)+";"
         elif datalist[1] == 'SENSOR_names':
             reply = 'true;SENSOR_names;'
-            cursor = conndb.execute("SELECT * from sensory")
+            cursor = conndb.execute("SELECT * from sensory ORDER BY Id DESC")
             for row in conndb.fetchall():
                 reply += str(row[0])+";"+str(row[1]) + ";"+str(row[5])+";"
         elif datalist[1] == 'SENSOR_update':
@@ -738,14 +740,22 @@ def requestMethod(data):
         elif datalist[1] == 'SENSOR_addCustom':
             conndb.execute("SELECT * from sensory where Type like 'custom'")
             cursor = conndb.fetchall()
-            conndb.execute("INSERT INTO sensory(Id,Name,H_refresh_sec,H_keep_days,Type,Unit,GPIO_BCM,Data_Name,Cmd_id) VALUES(%s,%s,%s,%s,'custom',%s,%s,%s,%s) RETURNING Id", ('Custom'+str(len(cursor)+1),datalist[2],datalist[3],datalist[4],datalist[5],datalist[6],datalist[7],datalist[8]))
+            customNumber = len(cursor)+1
+            while True:
+                conndb.execute("SELECT * from sensory where Id = %s",('Custom'+str(customNumber),))
+                cursor = conndb.fetchall()
+                if len(cursor) == 0: break
+                else: customNumber+=1
+            conndb.execute("INSERT INTO sensory(Id,Name,H_refresh_sec,H_keep_days,Type,Unit,GPIO_BCM,Data_Name,Cmd_id) VALUES(%s,%s,%s,%s,'custom',%s,%s,%s,%s) RETURNING Id", ('Custom'+str(customNumber),datalist[2],datalist[3],datalist[4],datalist[5],datalist[6],datalist[7],datalist[8]))
             reply = 'true;SENSOR_addCustom;'+str(conndb.fetchone()[0])
+            updateSensorHistory('Custom'+str(customNumber),conndb)
         elif datalist[1] == 'SENSOR_updateCustom':
             reply = 'true;SENSOR_updateCustom;'
             conndb.execute("UPDATE sensory set Name=%s,H_refresh_sec=%s,H_keep_days=%s,Unit=%s,GPIO_BCM=%s,Data_Name=%s,Cmd_id=%s where Id=%s", (datalist[3], datalist[4], datalist[5],datalist[6],datalist[7],datalist[8],datalist[9], datalist[2]))
         elif datalist[1] == 'SENSOR_remove':
             reply = 'true;SENSOR_remove;'
             conndb.execute("DELETE from sensory where Id=%s", (datalist[2],))
+            conndb.execute("DELETE from sensoryHistoria WHERE Id=%s", (datalist[2],))
             conndb.execute("DELETE FROM wyzwalaczeAkcji WHERE Id_s=%s AND Warunek LIKE 'sensor'", (datalist[2],))
             if conndb.rowcount > 0:
                 conndb.execute("UPDATE akcje set Edit_time=%s where Id in (SELECT Id FROM akcje LIMIT 1)", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),))
@@ -768,12 +778,12 @@ def requestMethod(data):
                     reply += str(row[4])+';'+str(row[1]) + ';'+str(row[7])+';'+str(row[2])+';'
                     i = i+1
         elif datalist[1] == 'GPIO_OInames':
-            cursor = conndb.execute("SELECT Id,Name from stany")
+            cursor = conndb.execute("SELECT Id,Name from stany ORDER BY Id DESC")
             reply = 'true;GPIO_OInames;'
             for row in conndb.fetchall():
                 reply += str(row[0])+';'+str(row[1])+';'
         elif datalist[1] == 'GPIO_PWMnames':
-            cursor = conndb.execute("SELECT Id,Name from pwm")
+            cursor = conndb.execute("SELECT Id,Name from pwm ORDER BY Id DESC")
             reply = 'true;GPIO_PWMnames;'
             for row in conndb.fetchall():
                 reply += str(row[0])+';'+str(row[1])+';'
@@ -784,7 +794,7 @@ def requestMethod(data):
             conndb.execute("UPDATE akcje set Cpu_usage=0, Rodzaj=%s, Edit_time=%s where Id=%s", (datalist[3], datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'), datalist[2]))
             reply = 'true;startStopASA;'
         elif datalist[1] == 'GPIO_ASAlist':
-            cursor = conndb.execute("SELECT * from akcje a left join stany s on a.Out_id = s.Id left join pwm p on a.Pwm_id = p.Id left join lancuchy l on a.Chain_id = l.Id left join rf r on a.Rf_id = r.Id left join customCmds c on a.Cmd_id = c.Id")
+            cursor = conndb.execute("SELECT * from akcje a left join stany s on a.Out_id = s.Id left join pwm p on a.Pwm_id = p.Id left join lancuchy l on a.Chain_id = l.Id left join rf r on a.Rf_id = r.Id left join customCmds c on a.Cmd_id = c.Id ORDER BY a.Id DESC")
             reply = 'true;GPIO_ASAlist;'
             for row in conndb.fetchall():
                 reply += ";".join(map(str, [row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[9],row[10],row[22],row[25],row[33],row[12],row[13],row[38],row[41],row[42],row[49],row[50],row[15],row[18]]))+";"
@@ -871,7 +881,7 @@ def requestMethod(data):
             cursor = conndb.execute("SELECT Max(Edit_time) FROM lancuchy")
             reply = 'true;GPIO_ChainEtime;'+str(conndb.fetchone()[0])+';'
         elif datalist[1] == 'GPIO_ChainList':
-            cursor = conndb.execute("SELECT * FROM lancuchy")
+            cursor = conndb.execute("SELECT * FROM lancuchy ORDER BY Id DESC")
             reply = 'true;GPIO_ChainList;'
             for row in conndb.fetchall():
                 reply+=str(row[0])+';'+str(row[1])+';'+str(row[2])+';'+str(row[3])+';'+str(row[4])+';'
@@ -911,7 +921,7 @@ def requestMethod(data):
             conndb.execute("UPDATE lancuchy SET Edit_time=%s WHERE Id=%s",(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[3]))
             reply = 'true;GPIO_ChainBondDelete;'
         elif datalist[1] == 'GPIO_ActionsNames':
-            cursor = conndb.execute("SELECT Id,Nazwa from akcje")
+            cursor = conndb.execute("SELECT Id,Nazwa from akcje ORDER BY Id DESC")
             reply = 'true;GPIO_ActionsNames;'
             for row in conndb.fetchall():
                 reply += str(row[0])+';'+str(row[1])+';'
@@ -964,7 +974,7 @@ def requestMethod(data):
                 logs = os.popen('journalctl -u rgc.service -r -n 200 --no-pager').read()
                 reply = 'true;Server_logs;'+logs+";"
         elif datalist[1] == 'Server_logs_JSON':
-                logs = os.popen('journalctl -u rgc.service -r --since "14 days ago" --no-pager --output=export --utc').read()
+                logs = os.popen('journalctl -u rgc.service -r --since "14 days ago" --no-pager --output=export --utc -n 1000').read()
                 logsArr = logs.splitlines()
                 reply = 'true;Server_logs_JSON;'
                 for log in logsArr:
@@ -1031,8 +1041,13 @@ def requestMethod(data):
             cursor = conndb.execute("SELECT * from sensoryHistoria WHERE Id=%s ORDER BY Timestamp DESC", (datalist[2],))
             for row in conndb.fetchall():
                 reply += str(row[1])+';'+str(row[2])+';'
+        elif datalist[1] == 'SENSOR_clearhistory':
+            conndb.execute("DELETE from sensoryHistoria WHERE Id=%s", (datalist[2],))
+            reply = 'true;SENSOR_clearhistory;'
         elif datalist[1] == 'SENSOR_refresh':
-            reply = 'true;SENSOR_refresh;'+str(updateSensorHistory(datalist[2],conndb))+";"
+            value = updateSensorHistory(datalist[2],conndb)
+            if value == -999: reply = 'false;SENSOR_refresh;'+str(value)+";"
+            else: reply = 'true;SENSOR_refresh;'+str(value)+";"
         elif datalist[1] == 'SENSORS_history':
             reply = 'true;SENSORS_history;'
             cursor = conndb.execute("SELECT s.Id,s.Name,s.Unit,h.Timestamp,h.Value from sensoryHistoria h JOIN sensory s ON h.Id = s.Id  WHERE s.Id IN ("+datalist[2]+")  ORDER BY Timestamp DESC")
@@ -1070,7 +1085,7 @@ def requestMethod(data):
         elif datalist[1] == 'SendRfCode':
             reply = sendRfCode(conndb,datalist[2],True)
         elif datalist[1] == 'GetRfCodes':
-            cursor = conndb.execute("SELECT * from rf")
+            cursor = conndb.execute("SELECT * from rf ORDER BY Id DESC")
             reply = 'true;GetRfCodes;'
             for row in conndb.fetchall():
                 reply += ";".join(map(str, [row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7]]))+";"
@@ -1107,7 +1122,7 @@ def requestMethod(data):
                 reply = 'true;ExecCustomCmd;'+execCmd[1]
             else: reply = 'false;'+execCmd[1]
         elif datalist[1] == 'GetCustomCmds':
-            cursor = conndb.execute("SELECT * from customCmds")
+            cursor = conndb.execute("SELECT * from customCmds ORDER BY Id DESC")
             reply = 'true;GetCustomCmds;'
             for row in conndb.fetchall():
                 reply += ";".join(map(str, row))+";"
@@ -1130,7 +1145,7 @@ def requestMethod(data):
             if res: reply = ";".join(map(str, res))
             else: reply = 'false;Cannot connect linked pi !'
         elif datalist[1] == 'GetLinkedPis':
-            cursor = conndb.execute("SELECT * from linkedPis")
+            cursor = conndb.execute("SELECT * from linkedPis ORDER BY Id DESC")
             reply = 'true;GetLinkedPis;'
             for row in conndb.fetchall():
                 reply += ";".join(map(str, row))+";"
@@ -1192,10 +1207,12 @@ class UDPRequestHandler(SocketServer.DatagramRequestHandler):
 class TCPRequestHandler(SocketServer.StreamRequestHandler):
     def handle(self):
         data = ""
-        while not exit_event.is_set():
+        timeout = time.time() + 20   # 20 sec from now
+        while not exit_event.is_set() and time.time() < timeout:
             line = self.rfile.readline().strip()
             data+=line
             if "#EOF#" in line: break
+            time.sleep(0.001)
         if debug: print("THREAD:{} FOR USER:{}".format(threading.current_thread().name,self.client_address[0]))
         reply = requestMethod(data)[0]
         reply = zlib.compress(reply).encode('base64')
@@ -1653,6 +1670,14 @@ if __name__ == '__main__':
                 if p.is_alive():
                     p.terminate()
                     p.join()
+            for proc in psutil.process_iter():
+                for conns in proc.connections(kind='inet'):
+                    if MODE != "wwwOnly":
+                        if conns.laddr.port == parser.getint('main','mobilePort'):
+                            proc.send_signal(signal.SIGTERM)
+                    elif MODE != "mobileOnly":
+                        if conns.laddr.port == parser.getint('main','wwwPort'):
+                            proc.send_signal(signal.SIGTERM)
             sys.exit(0)
 
         while not exit_event.is_set():
