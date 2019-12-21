@@ -77,6 +77,13 @@ sudo systemctl status rgc.service
 journalctl -u rgc.service # to see logs in case of problems
 ```
 
+## Update
+```bash
+wget https://github.com/arek125/remote-GPIO-control-server/releases/latest/download/rgc-update.tar.gz
+tar -zxvf rgc-server.tar.gz
+sudo systemctl restart rgc.service
+```
+
 ## Support
 Tested and working on Raspberry Pi devices with Raspiain OS.
 
