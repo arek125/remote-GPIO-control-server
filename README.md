@@ -28,7 +28,7 @@ Main features:
 ## Installation
 ### Download and unpack last release 
 ```bash
-wget https://github.com/arek125/remote-GPIO-control-server/releases/latest/download/rgc-install.tar.gz
+wget -O rgc-install.tar.gz https://github.com/arek125/remote-GPIO-control-server/releases/latest/download/rgc-install.tar.gz
 tar -zxvf rgc-update.tar.gz
 cd rgc
 ```
