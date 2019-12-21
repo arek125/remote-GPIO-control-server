@@ -62,9 +62,8 @@ parser.read('rgc-config.ini')
 PASSWORD = ''
 MODE = parser.get('main','mode')
 ENC_KEY = ''
-break_ = -1
-CODE_VERSION = 5
-TAG_VERSION = 3.0
+CODE_VERSION = 6
+TAG_VERSION = 3.1
 startTime = None
 DS = None
 TSL = None
@@ -79,6 +78,7 @@ strptime = datetime.strptime
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 exit_event = multiprocessing.Event()
+doRestartAfterReply = -1
 
 running_proceses = []
 mesured_proceses = {}
@@ -118,6 +118,10 @@ def action(id,idCE = 0,changedBy="scheduled"):
     startTime = time.time()
     trigger_timer = {}
     conn, conndb4 = newDBConnP()
+    log = logging.getLogger('demo')
+    log.addHandler(JournalHandler())
+    log.setLevel(logging.INFO)
+    global exit_event
     while not exit_event.is_set():
         # try:
         conndb4.execute("SELECT * FROM akcje WHERE Id = %s",(id,))
@@ -237,10 +241,10 @@ def action(id,idCE = 0,changedBy="scheduled"):
                         else: conndb4.execute("UPDATE lancuchy set Status=0 WHERE Id=%s",(row[12],))
                         execuded = True
                     elif (row[1] == 'rfsend' and not isThereTimeTrigger) or (row[1] == 'rfsend' and isThereTimeTrigger and lastExecTime != currentTime):
-                        sendRfCode(conndb4,row[14],False,log)
+                        sendRfCode(conndb4,row[14],False,True if row[13] else False)
                         execuded = True
                     elif (row[1] == 'cmd' and not isThereTimeTrigger) or (row[1] == 'cmd' and isThereTimeTrigger and lastExecTime != currentTime):
-                        execCustomCmd(conndb4,row[16],changedBy,log)
+                        execCustomCmd(conndb4,row[16],changedBy,True if row[13] else False)
                         execuded = True
                     if noe > 0 and execuded:
                         conndb4.execute("UPDATE akcje set Rodzaj=%s,Edit_time=%s where Id = %s", (str(noe-1),datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),row[0]))
@@ -392,45 +396,99 @@ def GPIOset(pinout, onoff):
             GPIO.setup(pin, GPIO.OUT)
             GPIO.output(pin, onoff)
 
+def GPIOinputSet(inpin, resistor, method, id, stan, reverse, time):
+    channel = int(inpin)
+    if resistor == 1: GPIO.setup(channel, GPIO.IN, GPIO.PUD_UP)
+    elif resistor == 2: GPIO.setup(channel, GPIO.IN, GPIO.PUD_DOWN)
+    else: GPIO.setup(channel, GPIO.IN)
+    if(method == 'ined'):
+        cb = debounceHandler(channel, lambda channel, id=id, reverse=reverse: inputCallback(channel, id, reverse),bouncetime=200 if not time else int(time))
+        cb.daemon = True
+        cb.start()
+        GPIO.add_event_detect(channel, GPIO.BOTH, callback=cb)
+    else:
+        p1 = multiprocessing.Process(target=inputLoop, args=(id, channel, stan, reverse, time))
+        p1.daemon = True
+        p1.start()
+        running_proceses.append(p1)
+
 def GPIOPWM(inpin, fr):
     GPIO.setup(inpin, GPIO.OUT)
     return GPIO.PWM(inpin, fr)
 
-def inputLoop(id, inpin, Stan, reverse):
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setwarnings(False)
+def inputCallback(channel, id, reverse):
+    conn, conndb = newDBConnP()
+    #print str(GPIO.input(channel))+';'+str(reverse)+';'+str(channel)
+    if GPIO.input(channel):
+        conndb.execute("UPDATE stany set Stan =0,Edit_time=%s where Id=%s", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'), str(id)))
+        conndb.execute("INSERT INTO historia(Typ, Id_IO, Stan) VALUES(%s,%s,%s)",("input", id, "ON" if reverse else "OFF"))
+    else: 
+        conndb.execute("UPDATE stany set Stan =1,Edit_time=%s where Id=%s", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'), str(id)))
+        conndb.execute("INSERT INTO historia(Typ, Id_IO, Stan) VALUES(%s,%s,%s)",("input", id, "ON" if (not reverse) else "OFF"))
+    conndb.close()
+    conn.close()
+
+class debounceHandler(threading.Thread):
+    def __init__(self, pin, func, edge='both', bouncetime=200):
+        super(debounceHandler,self).__init__()
+        self.edge = edge
+        self.func = func
+        self.pin = pin
+        self.bouncetime = float(bouncetime)/1000
+        self.lastpinval = GPIO.input(self.pin)
+        self.lock = threading.Lock()
+
+    def __call__(self, *args):
+        if not self.lock.acquire():
+            return
+        t = threading.Timer(self.bouncetime, self.read, args=args)
+        t.start()
+
+    def read(self, *args):
+        pinval = GPIO.input(self.pin)
+        if (
+                ((pinval == 0 and self.lastpinval == 1) and
+                 (self.edge in ['falling', 'both'])) or
+                ((pinval == 1 and self.lastpinval == 0) and
+                 (self.edge in ['rising', 'both']))
+        ):
+            self.func(*args)
+        self.lastpinval = pinval
+        self.lock.release()
+
+
+def inputLoop(id, inpin, Stan, reverse, SleepTime):
+    def exitLoop(conn,conndb):
+        conndb.close()
+        conn.close()
+        sys.exit()
     inpin = int(inpin)
-    id2 = int(id)
     Stan = int(Stan)
-    GPIO.setup(inpin, GPIO.IN, GPIO.PUD_UP)
-    global break_
     if Stan == 0: stan = 2
     elif Stan == 1: stan = 4
     else: stan = 2
     conn, conndb = newDBConnP()
+    sleepTime = 0.05
+    if SleepTime: 
+        if float(SleepTime) > 0: sleepTime = float(SleepTime)/1000
+    global exit_event
     while not exit_event.is_set():
+        conndb.execute("SELECT id FROM stany WHERE Id = %s",(id,))
+        row = conndb.fetchone()
+        if row is None:
+            exitLoop(conn, conndb)
         if stan == 2:
-            channel = GPIO.wait_for_edge(inpin, GPIO.FALLING, timeout=1000)
-            if channel is not None:
-                try:
-                    conndb.execute("UPDATE stany set Stan =1,Edit_time=%s where GPIO_BCM=%s and IN_OUT like 'in'", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'), str(inpin)))
-                    conndb.execute("INSERT INTO historia(Typ, Id_IO, Stan) VALUES(%s,%s,%s)",("input", id, "ON" if (not reverse) else "OFF"))
-                    stan = 4
-                except: stan = 2
+            if GPIO.input(inpin) == 0:
+                conndb.execute("UPDATE stany set Stan =1,Edit_time=%s where Id=%s", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'), str(id)))
+                conndb.execute("INSERT INTO historia(Typ, Id_IO, Stan) VALUES(%s,%s,%s)",("input", id, "ON" if (not reverse) else "OFF"))
+                stan = 4
         if stan == 4:
-            channel = GPIO.wait_for_edge(inpin, GPIO.RISING, timeout=1000)
-            if channel is not None:
-                try:
-                    conndb.execute("UPDATE stany set Stan =0,Edit_time=%s where GPIO_BCM=%s and IN_OUT like 'in'", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'), str(inpin)))
-                    conndb.execute("INSERT INTO historia(Typ, Id_IO, Stan) VALUES(%s,%s,%s)",("input", id, "ON" if reverse else "OFF"))
-                    stan = 2
-                except: stan = 4
-        if GPIO.input(inpin): stan = 2
-        else: stan = 4
-        if break_ == id2: break
-        #time.sleep(0.05)
-    conndb.close()
-    conn.close()
+            if GPIO.input(inpin) == 1:
+                conndb.execute("UPDATE stany set Stan =0,Edit_time=%s where Id=%s", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'), str(id)))
+                conndb.execute("INSERT INTO historia(Typ, Id_IO, Stan) VALUES(%s,%s,%s)",("input", id, "ON" if reverse else "OFF"))
+                stan = 2
+        time.sleep(sleepTime)
+    exitLoop(conn,conndb)
 
 def newDBConnP():
     connectionString = "dbname='{}' user='{}' host='{}' password='{}'".format(parser.get('postgresql','db'),parser.get('postgresql','user'),parser.get('postgresql','host'),parser.get('postgresql','password'))
@@ -473,7 +531,6 @@ def requestMethod(data):
     datalist = data.split(";")
     passwalidation = False
     httpCode = 200
-    global break_
     if PASSWORD == '':
         passwalidation = True
     else:
@@ -490,6 +547,7 @@ def requestMethod(data):
             passwalidation = False
     if debug: print 'RECIVED: '+data
     conn,conndb = newDBConnP()
+    global doRestartAfterReply
     if passwalidation == True:
         if datalist[1] == 'version_check':
             reply = 'true;version_check;'+str(CODE_VERSION)+';'
@@ -527,7 +585,6 @@ def requestMethod(data):
                     GPIO.cleanup(int(pin2))
             reply = 'true;Edit_GPIO_out;'
         elif datalist[1] == 'Delete_GPIO_out':
-            break_ = int(datalist[2])
             conndb.execute("DELETE from stany where Id=%s", (datalist[2],))
             conndb.execute("UPDATE stany set Edit_time=%s where Id in (SELECT Id FROM stany LIMIT 1)", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),))
             conndb.execute("DELETE from historia where Id_IO=%s", (datalist[2],))
@@ -545,32 +602,33 @@ def requestMethod(data):
             pwmpins = datalist[3].split(",")
             for pin in pwmpins:
                 GPIO.cleanup(int(pin))
+            if datalist[4] == 'ined':
+                GPIO.remove_event_detect(int(datalist[3]))
             reply = 'true;Delete_GPIO_out;'+datalist[2]+';'
         elif datalist[1] == 'GPIO_IEtime':
-            cursor = conndb.execute("SELECT Max(Edit_time) FROM stany where IN_OUT like 'in'")
+            cursor = conndb.execute("SELECT Max(Edit_time) FROM stany where IN_OUT like 'in%'")
             for row in conndb.fetchall():
                 reply = 'true;GPIO_IEtime;'+str(row[0])+';'
         elif datalist[1] == 'GPIO_Ilist':
-            cursor = conndb.execute("SELECT * from stany where IN_OUT like 'in' ORDER BY Id DESC")
+            cursor = conndb.execute("SELECT * from stany where IN_OUT like 'in%' ORDER BY Id DESC")
             reply = 'true;GPIO_Ilist;'
             for row in conndb.fetchall():
-                reply += str(row[0])+';'+str(row[1])+';'+str(row[2])+';'+str(row[3])+';'+str(row[6])+';'+str(row[7])+';'+str(row[8])+';'
+                reply += str(row[0])+';'+str(row[1])+';'+str(row[2])+';'+str(row[3])+';'+str(row[6])+';'+str(row[7])+';'+str(row[8])+';'+row[4]+';'
         elif datalist[1] == 'Add_GPIO_in':
-            conndb.execute("INSERT INTO stany VALUES (DEFAULT,%s,0,%s,'in',%s,%s,%s,%s) RETURNING Id", (datalist[2], datalist[3], datalist[4], datalist[5], datalist[6], datalist[7]))
+            conndb.execute("INSERT INTO stany VALUES (DEFAULT,%s,0,%s,%s,%s,%s,%s,%s) RETURNING Id", (datalist[2], datalist[3],datalist[8], datalist[4], datalist[5], (float(datalist[6])*1000), datalist[7]))
             id = conndb.fetchone()[0]
-            conndb.execute("INSERT INTO historia(Typ, Id_IO, Stan) VALUES(%s,%s,%s)", (datalist[8], str(id), "ADDED"))
-            threading.Thread(target=inputLoop, args=(id, datalist[2], '0', datalist[5])).start()
+            conndb.execute("INSERT INTO historia(Typ, Id_IO, Stan) VALUES(%s,%s,%s)", (datalist[9], str(id), "ADDED"))
+            GPIOinputSet(datalist[2],1 if not datalist[7] else int(datalist[7]), datalist[8], id, 0, int(datalist[5]), (float(datalist[6])*1000))
             reply = 'true;Add_GPIO_in;'
         elif datalist[1] == 'Edit_GPIO_in':
-            break_ = int(datalist[2])
             conndb.execute("DELETE from stany where Id=%s", (datalist[2],))
             conndb.execute("DELETE from historia where Id_IO=%s", (datalist[2],))
-            conndb.execute("INSERT INTO stany VALUES (DEFAULT,%s,0,%s,'in',%s,%s,%s,%s) RETURNING Id", (datalist[3], datalist[4], datalist[5], datalist[6], datalist[7], datalist[8]))
+            conndb.execute("INSERT INTO stany VALUES (DEFAULT,%s,0,%s,%s,%s,%s,%s,%s) RETURNING Id", (datalist[3], datalist[4],datalist[10], datalist[5], datalist[6], (float(datalist[7])*1000), datalist[8]))
             id = conndb.fetchone()[0]
-            conndb.execute("INSERT INTO historia(Typ, Id_IO, Stan) VALUES(%s,%s,%s)", (datalist[10], str(id), "EDITED"))
-            if datalist[3] != datalist[9]:
-                GPIO.cleanup(int(datalist[9]))
-            threading.Thread(target=inputLoop, args=(id, datalist[3], '0', datalist[6])).start()
+            conndb.execute("INSERT INTO historia(Typ, Id_IO, Stan) VALUES(%s,%s,%s)", (datalist[11], str(id), "EDITED"))
+            if(datalist[10] == 'ined'): GPIO.remove_event_detect(int(datalist[9]))
+            GPIO.cleanup(int(datalist[9]))
+            GPIOinputSet(datalist[3],1 if not datalist[8] else int(datalist[8]), datalist[10], id, 0, int(datalist[6]), (float(datalist[7])*1000))
             reply = 'true;Edit_GPIO_in;'
         elif datalist[1] == 'GPIO_Oname':
             cursor = conndb.execute("SELECT Id,Name,GPIO_BCM,Reverse from stany where IN_OUT like 'out' ORDER BY Id DESC")
@@ -620,7 +678,6 @@ def requestMethod(data):
             conndb.execute("INSERT INTO historia(Typ, Id_Pwm, Stan) VALUES(%s,%s,%s)", (datalist[8], str(idpwm), "ADDED:DC="+datalist[4]+"%,FR="+datalist[3]+"Hz"))
             reply = 'true;Add_GPIO_pwm;'
         elif datalist[1] == 'Delete_GPIO_pwm':
-            break_ = int(datalist[2])
             conndb.execute("DELETE from pwm where Id=%s", (datalist[2],))
             conndb.execute("DELETE from historia where Id_Pwm=%s", (datalist[2],))
             conndb.execute("UPDATE pwm set Edit_time=%s where Id in (SELECT Id FROM pwm LIMIT 1)", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),))
@@ -677,7 +734,7 @@ def requestMethod(data):
             sqlExec ='''
                 (SELECT GPIO_BCM from stany WHERE IN_OUT like 'out' AND Id != {id_out})
                 UNION
-                (SELECT GPIO_BCM from stany WHERE IN_OUT like 'in' AND Id != {id_in}) 
+                (SELECT GPIO_BCM from stany WHERE IN_OUT like 'in%' AND Id != {id_in}) 
                 UNION
                 (SELECT GPIO_BCM from pwm WHERE Id != {id_pwm})
                 UNION
@@ -690,7 +747,7 @@ def requestMethod(data):
                 for pin in pins: reply += pin+';'
         elif datalist[1] == 'Allpins_GPIO_in':
             reply = 'true;Allpins_GPIO_in;'
-            cursor = conndb.execute("SELECT GPIO_BCM from stany where IN_OUT like 'in'")
+            cursor = conndb.execute("SELECT GPIO_BCM from stany where IN_OUT like 'in%'")
             for row in conndb.fetchall():
                 reply += str(row[0])+';'
         elif datalist[1] == 'ActionCheck':
@@ -797,7 +854,7 @@ def requestMethod(data):
             cursor = conndb.execute("SELECT * from akcje a left join stany s on a.Out_id = s.Id left join pwm p on a.Pwm_id = p.Id left join lancuchy l on a.Chain_id = l.Id left join rf r on a.Rf_id = r.Id left join customCmds c on a.Cmd_id = c.Id ORDER BY a.Id DESC")
             reply = 'true;GPIO_ASAlist;'
             for row in conndb.fetchall():
-                reply += ";".join(map(str, [row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[9],row[10],row[22],row[25],row[33],row[12],row[13],row[38],row[41],row[42],row[49],row[50],row[15],row[18]]))+";"
+                reply += ";".join(map(str, [row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[9],row[10],row[22],row[25],row[33],row[12],row[13],row[38],row[42],row[43],row[50],row[51],row[15],row[18]]))+";"
                 conndb.execute("SELECT * FROM wyzwalaczeAkcji w left join stany s on w.Id_s=CAST(s.Id AS TEXT) left join pwm p on w.Id_s=CAST(p.Id AS text) left join sensory se on w.Id_s=se.Id left join rf r on w.Id_s=CAST(r.Id AS TEXT) left join customCmds c on w.Id_s=CAST(c.Id AS TEXT) left join linkedPis l on w.Id_link = l.Id WHERE w.Id_a=%s ORDER BY w.Lp",(str(row[0]),))
                 for row1 in conndb.fetchall():
                     reply+=str(row1[0])+'$'+str(row1[2])+'$'+str(row1[3])+'$'+str(row1[4])+'$'+str(row1[5])+'$'+str(row1[6])+'$'+str(row1[12])+'$'+str(row1[15])+'$'+str(row1[23])+'$'+str(row1[27])+'$'+str(row1[31])+'$'+str(row1[37])+'$'+str(row1[45])+'$'+str(row1[7])+'$'+str(row1[8])+'$'+str(row1[49])+'$'
@@ -870,10 +927,11 @@ def requestMethod(data):
         elif datalist[1] == 'Server_restart':
             statusCode = os.system("systemctl status rgc.service")
             if statusCode == 0:
-                os.system("systemctl restart rgc.service")
+                doRestartAfterReply = 1
             reply = 'true;Server_restart;'
         elif datalist[1] == 'Server_reboot':
-            os.system("reboot")
+            doRestartAfterReply = 2
+            reply = 'true;Server_restart;Rebooting now...'
         elif datalist[1] == 'Server_status_code':
             statusCode = os.system("systemctl status rgc.service")
             reply = 'true;Server_status_code;'+str(statusCode)+";"
@@ -884,22 +942,22 @@ def requestMethod(data):
             cursor = conndb.execute("SELECT * FROM lancuchy ORDER BY Id DESC")
             reply = 'true;GPIO_ChainList;'
             for row in conndb.fetchall():
-                reply+=str(row[0])+';'+str(row[1])+';'+str(row[2])+';'+str(row[3])+';'+str(row[4])+';'
+                reply+=str(row[0])+';'+str(row[1])+';'+str(row[2])+';'+str(row[3])+';'+str(row[4])+';'+str(row[5])+';'
                 conndb.execute("SELECT * FROM spoiwaLancuchow s LEFT JOIN stany st ON s.Out_id = st.Id LEFT JOIN pwm p ON s.Pwm_id = p.Id LEFT JOIN akcje a ON s.A_id = a.Id LEFT JOIN rf r ON s.Rf_id = r.Id LEFT JOIN customCmds c ON s.Cmd_id = c.Id LEFT JOIN linkedPis l ON s.Link_id = l.Id WHERE s.Id_c = %s ORDER BY Lp",(str(row[0]),))
                 for row1 in conndb.fetchall():
                     reply+="$".join(map(str, [row1[0],row1[1],row1[2],row1[3],row1[4],row1[5],row1[6],row1[7],row1[8],row1[9],row1[10],row1[11],row1[20],row1[31],row1[44],row1[51],row1[52],row1[59],row1[60],row1[14],row1[15],row1[64],row1[16]]))+"$"
                 reply+=';'
         elif datalist[1] == 'GPIO_ChainExecute':
-            threading.Thread(target=chainExecude, args=(datalist[2], datalist[3])).start()
+            threading.Thread(target=chainExecude, args=(datalist[2], datalist[4],True if int(datalist[3]) else False)).start()
             reply = 'true;GPIO_ChainExecute;'
         elif datalist[1] == 'GPIO_ChainCancel':
             conndb.execute("UPDATE lancuchy set Status=0 WHERE Id=%s",(datalist[2],))
             reply = 'true;GPIO_ChainCancel;'
         elif datalist[1] == 'GPIO_ChainAdd':
-            conndb.execute("INSERT INTO lancuchy (Nazwa,Status,Edit_time,ExecCountdown) VALUES(%s,%s,%s,%s)",(datalist[2],0,datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[3]))
+            conndb.execute("INSERT INTO lancuchy (Nazwa,Status,Edit_time,ExecCountdown,Log) VALUES(%s,%s,%s,%s,%s)",(datalist[2],0,datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[3],datalist[4]))
             reply = 'true;GPIO_ChainAdd;'
         elif datalist[1] == 'GPIO_ChainUpdate':
-            conndb.execute("Update lancuchy SET Nazwa=%s,Edit_time=%s,ExecCountdown=%s WHERE Id=%s",(datalist[3],datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[4],datalist[2]))
+            conndb.execute("Update lancuchy SET Nazwa=%s,Edit_time=%s,ExecCountdown=%s,Log=%s WHERE Id=%s",(datalist[3],datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[4],datalist[5],datalist[2]))
             reply = 'true;GPIO_ChainUpdate;'
         elif datalist[1] == 'GPIO_ChainDelete':
             conndb.execute("DELETE FROM lancuchy WHERE Id=%s",(datalist[2]))
@@ -1002,19 +1060,19 @@ def requestMethod(data):
             timeConfLines = timeConf.splitlines()
             for line in timeConfLines:
                 reply += line+';'
-        elif datalist[1] == 'Server_update':
-            statusCode = os.system("systemctl status rgc.service")
-            if statusCode == 0:
-                path = os.getcwd()+"/rgc-server.tar.gz"
-                fh = open(path, "wb")
-                fh.write(datalist[2].decode('base64'))
-                fh.close()
-                import tarfile
-                tar = tarfile.open(path)
-                tar.extractall()
-                tar.close()
-                conndb.close()
-                os.system("systemctl restart rgc.service")
+        # elif datalist[1] == 'Server_update':
+        #     statusCode = os.system("systemctl status rgc.service")
+        #     if statusCode == 0:
+        #         path = os.getcwd()+"/rgc-server.tar.gz"
+        #         fh = open(path, "wb")
+        #         fh.write(datalist[2].decode('base64'))
+        #         fh.close()
+        #         import tarfile
+        #         tar = tarfile.open(path)
+        #         tar.extractall()
+        #         tar.close()
+        #         conndb.close()
+        #         doRestartAfterReply = 1
         elif datalist[1] == 'HR_sel':
             cursor = conndb.execute("SELECT h.Id,Czas,Typ,case when s.Name is NOT NULL then s.Name when p.Name is NOT NULL then p.Name when l.Nazwa is NOT NULL then l.Nazwa else c.Name end as NameC,h.Stan FROM historia h Left JOIN stany s ON s.Id = h.Id_IO left JOIN pwm p ON p.Id = h.Id_Pwm left JOIN lancuchy l ON l.Id = h.Id_c left JOIN customCmds c ON c.Id = h.Id_cmd where Czas between %s and %s order by Czas DESC LIMIT %s", (datalist[2], datalist[3],datalist[5]))
             reply = 'true;HR_sel;'+datalist[4]+";"
@@ -1067,11 +1125,13 @@ def requestMethod(data):
                 reply = 'true;ServerUpdateFromGH;Cannot update, no internet access %s;'
             else:
                 downURL = lastRelease['assets'][1]['browser_download_url']
-                savedFile = open(os.getcwd()+"/rgc-server.tar.gz", 'w')
+                savedFile = open(os.getcwd()+"/rgc-update.tar.gz", 'w')
                 savedFile.write(urllib2.urlopen(downURL).read())
                 savedFile.close()
                 import tarfile
-                tar = tarfile.open(os.getcwd()+"/rgc-server.tar.gz")
+                import shutil
+                tar = tarfile.open(os.getcwd()+"/rgc-update.tar.gz")
+                shutil.rmtree(os.getcwd()+"/www")
                 def members(tf):
                     l = len("rgc/")
                     for member in tf.getmembers():
@@ -1080,7 +1140,7 @@ def requestMethod(data):
                             yield member
                 tar.extractall(members=members(tar))
                 tar.close()
-                os.system("systemctl restart rgc.service")
+                doRestartAfterReply = 1
                 reply = 'true;ServerUpdateFromGH;Update in progress...;'
         elif datalist[1] == 'SendRfCode':
             reply = sendRfCode(conndb,datalist[2],True)
@@ -1194,7 +1254,12 @@ def requestMethod(data):
     return (reply,httpCode)
 
 
-
+def rebotOrRestartAfterReply():
+    global doRestartAfterReply
+    if doRestartAfterReply != -1:
+        time.sleep(2)
+        if doRestartAfterReply == 1: os.system("systemctl restart rgc.service")
+        elif doRestartAfterReply == 2: os.system("reboot")
 
 class UDPRequestHandler(SocketServer.DatagramRequestHandler):
     def handle(self):
@@ -1203,6 +1268,8 @@ class UDPRequestHandler(SocketServer.DatagramRequestHandler):
         if debug and PASSWORD: print 'RECIVED_ENC: '+data
         reply = requestMethod(data)[0]
         self.wfile.write(reply)
+        rebotOrRestartAfterReply()
+
 
 class TCPRequestHandler(SocketServer.StreamRequestHandler):
     def handle(self):
@@ -1218,6 +1285,7 @@ class TCPRequestHandler(SocketServer.StreamRequestHandler):
         reply = zlib.compress(reply).encode('base64')
         if debug: print "SIZE: "+str(sys.getsizeof(reply))+"b"
         self.request.sendall(reply)
+        rebotOrRestartAfterReply()
 
 class HTTPRequestHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -1245,6 +1313,7 @@ class HTTPRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(replyData)))
         self.end_headers()
         self.wfile.write(replyData) #send response
+        rebotOrRestartAfterReply()
 
 class ThreadedHTTPServer(SocketServer.ThreadingMixIn, HTTPServer):
     """Handle requests in a separate thread."""
@@ -1340,7 +1409,8 @@ if __name__ == '__main__':
             Status	INTEGER NOT NULL DEFAULT 0,
             Nazwa	TEXT,
             Edit_time	TEXT DEFAULT timezone('utc', now()),
-            ExecCountdown INTEGER DEFAULT 1
+            ExecCountdown INTEGER DEFAULT 1,
+            Log INTEGER DEFAULT 1
         );
         CREATE TABLE IF NOT EXISTS spoiwaLancuchow (
             Id	SERIAL NOT NULL PRIMARY KEY,
@@ -1395,6 +1465,7 @@ if __name__ == '__main__':
         ''')
     conndb.execute("ALTER TABLE lancuchy ADD COLUMN IF NOT EXISTS ExecCountdown INTEGER DEFAULT 1;")
     conndb.execute("ALTER TABLE spoiwaLancuchow ADD COLUMN IF NOT EXISTS C_id INTEGER;")
+    conndb.execute("ALTER TABLE lancuchy ADD COLUMN IF NOT EXISTS Log INTEGER DEFAULT 1;")
 
     log.info('Server local time: '+datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f'))
     startTime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
@@ -1637,10 +1708,22 @@ if __name__ == '__main__':
         sensors_th = threading.Thread(target=sensorLoop)
         sensors_th.daemon = True
         sensors_th.start()
-        conndb.execute("SELECT * from stany where IN_OUT like 'in'")
+        conndb.execute("SELECT * from stany where IN_OUT like 'in%'")
         for row in conndb.fetchall():
             log.info('INPUT: GPIO='+str(row[1])+' STATE='+str(row[2]))
-            threading.Thread(target=inputLoop, args=(row[0], row[1], row[2], row[6])).start()
+            # threading.Thread(target=inputLoop, args=(row[0], row[1], row[2], row[6])).start()
+            GPIOinputSet(row[1],1 if not row[8] else int(row[8]),row[4], row[0], row[2], row[6], row[7])
+            # if(row[4] == 'in'):
+            #     cb = debounceHandler(int(row[1]), lambda channel, id=row[0], Stan=row[2], reverse=row[6]: inputCallback(channel, id, Stan, reverse),bouncetime=200 if not row[7] else int(row[7]))
+            #     cb.daemon = True
+            #     cb.start()
+            #     GPIO.add_event_detect(int(row[1]), GPIO.BOTH, callback=cb)
+            # else:
+            #     p1 = multiprocessing.Process(target=inputLoop, args=(row[0], row[1], row[2], row[6], row[7]))
+            #     p1.daemon = True
+            #     p1.start()
+            #     running_proceses.append(p1)
+            #GPIO.add_event_detect(int(row[1]), GPIO.BOTH, lambda channel, id=row[0], Stan=row[2], reverse=row[6]: inputCallback(channel, id, Stan, reverse), bouncetime=50)
         if MODE != 'wwwOnly':
             serverUDP_thread.start()
             serverTCP_thread.start()

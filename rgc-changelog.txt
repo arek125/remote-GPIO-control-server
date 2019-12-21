@@ -1,3 +1,12 @@
+3.1
+- gpio inputs fixed and reworked:
+	- two methods avalible for state change detection (loop monitoring and edge detection)
+	- resistor of pi can now be choosed
+	- configurable cpu rest time for loop monitoring method
+	- configurable switch bounce time for edge detection method
+- logs for execution chains can now be disabled
+- android client can now have secondary ip and port set, (used when connected to specefid wifi network) 
+
 3.0.2
 - bugs and layout fixes 
 
