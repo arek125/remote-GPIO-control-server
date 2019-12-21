@@ -197,14 +197,16 @@
                 
             <li class="second-level"><a href="#server-access">Server access</a></li>
                 
+            <li class="second-level"><a href="#update">Update</a></li>
+                
     </ul>
 </div></div>
         <div class="col-md-9" role="main">
 
 <h1 id="installation">Installation</h1>
 <h2 id="download-and-unpack-last-release">Download and unpack last release</h2>
-<pre><code class="bash">wget https://github.com/arek125/remote-GPIO-control-server/releases/latest/download/rgc-server.tar.gz
-tar -zxvf rgc-server.tar.gz
+<pre><code class="bash">wget -O rgc-install.tar.gz https://github.com/arek125/remote-GPIO-control-server/releases/latest/download/rgc-install.tar.gz
+tar -zxvf rgc-install.tar.gz
 cd rgc
 </code></pre>
 
@@ -257,7 +259,13 @@ journalctl -u rgc.service # to see logs in case of problems (avalible form clien
 
 <h2 id="server-access">Server access</h2>
 <p>To access web app go to http://deviceIpOrHost:port (eg. http://192.168.1.4:9999)
-To access from android app, install apk file and configure connection.</p></div>
+To access from android app, install apk file and configure connection.</p>
+<h2 id="update">Update</h2>
+<pre><code class="bash">cd /home/pi # or go to rgc main folder destination
+wget -O rgc-update.tar.gz https://github.com/arek125/remote-GPIO-control-server/releases/latest/download/rgc-update.tar.gz
+tar -zxvf rgc-update.tar.gz
+sudo systemctl restart rgc.service
+</code></pre></div>
         
         
     </div>
