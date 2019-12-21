@@ -1,7 +1,7 @@
 # Installation
 ## Download and unpack last release 
 ```bash
-wget https://github.com/arek125/remote-GPIO-control-server/releases/latest/download/rgc-server.tar.gz
+wget -O rgc-install.tar.gz https://github.com/arek125/remote-GPIO-control-server/releases/latest/download/rgc-install.tar.gz
 tar -zxvf rgc-server.tar.gz
 cd rgc
 ```
@@ -62,3 +62,11 @@ journalctl -u rgc.service # to see logs in case of problems (avalible form clien
 
 To access web app go to http://deviceIpOrHost:port (eg. http://192.168.1.4:9999)
 To access from android app, install apk file and configure connection.
+
+## Update
+```bash
+cd /home/pi # or go to rgc main folder destination
+wget -O rgc-update.tar.gz https://github.com/arek125/remote-GPIO-control-server/releases/latest/download/rgc-update.tar.gz
+tar -zxvf rgc-update.tar.gz
+sudo systemctl restart rgc.service
+```
