@@ -79,8 +79,9 @@ journalctl -u rgc.service # to see logs in case of problems
 
 ## Update
 ```bash
-wget https://github.com/arek125/remote-GPIO-control-server/releases/latest/download/rgc-update.tar.gz
-tar -zxvf rgc-server.tar.gz
+cd /home/pi # or go to rgc main folder destination
+wget -O rgc-update.tar.gz https://github.com/arek125/remote-GPIO-control-server/releases/latest/download/rgc-update.tar.gz
+tar -zxvf rgc-update.tar.gz
 sudo systemctl restart rgc.service
 ```
 
