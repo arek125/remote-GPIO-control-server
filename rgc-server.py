@@ -31,8 +31,10 @@ from Crypto import Random
 from Crypto.Cipher import AES
 import multiprocessing
 import psycopg2
+from psycopg2.extras import DictCursor
 from ConfigParser import SafeConfigParser
 import psutil
+import traceback
 
 def encrypt(key, message):
     try:
@@ -62,8 +64,8 @@ parser.read('rgc-config.ini')
 PASSWORD = ''
 MODE = parser.get('main','mode')
 ENC_KEY = ''
-CODE_VERSION = 6
-TAG_VERSION = 3.1
+CODE_VERSION = 7
+TAG_VERSION = 3.2
 startTime = None
 DS = None
 TSL = None
@@ -91,8 +93,10 @@ def services():
         for row in rows:
             isRunning = False
             if row[17]:
-                if psutil.pid_exists(row[17]):
+                #if psutil.pid_exists(row[17]):
+                if any(p.pid == row[17] for p in running_proceses):
                     isRunning = True
+                #print row[10]+str(isRunning)+str(row[17])
             conndbth.execute("SELECT Id FROM wyzwalaczeAkcji WHERE Id_a = %s AND Warunek = 'in chain'",(str(row[0]),))
             rowChain = conndbth.fetchone()
             if not isRunning and rowChain is None: 
@@ -102,11 +106,14 @@ def services():
                 running_proceses.append(p1)
                 conndbth.execute("UPDATE akcje set Pid=%s where Id=%s", (str(p1.pid),row[0]))
                 time.sleep(0.01)
-            elif rowChain is None and psutil.pid_exists(row[17]):
+            elif rowChain is None and isRunning:
                 try: pu = mesured_proceses[row[17]]
                 except KeyError: mesured_proceses[row[17]] = pu = psutil.Process(row[17])
                 cpuUsage = pu.cpu_percent()/psutil.cpu_count()
                 conndbth.execute("UPDATE akcje set Cpu_usage=%s where Id=%s", (str(cpuUsage),row[0]))
+        for p in running_proceses:
+            #print str(p.pid)+str(p.is_alive())
+            if not p.is_alive():running_proceses.remove(p)
         time.sleep(5)
     conndbth.close()
     conn.close()
@@ -120,148 +127,177 @@ def action(id,idCE = 0,changedBy="scheduled"):
     conn, conndb4 = newDBConnP()
     log = logging.getLogger('demo')
     log.addHandler(JournalHandler())
-    log.setLevel(logging.INFO)
+    log.setLevel(logging.ERROR)
+    proc = multiprocessing.current_process()
     global exit_event
     while not exit_event.is_set():
-        # try:
-        conndb4.execute("SELECT * FROM akcje WHERE Id = %s",(id,))
-        row = conndb4.fetchone()
-        if row is None: sys.exit()
-        conndb4.execute("SELECT * FROM wyzwalaczeAkcji w left join sensory s on w.Id_s = s.Id left join stany st on w.Id_s = CAST(st.Id AS TEXT) left join pwm p on w.Id_s = CAST(p.Id AS TEXT) left join rf r on w.Id_s=CAST(r.Id AS TEXT) WHERE w.Id_a = %s ORDER BY w.Lp",(row[0],))
-        conditions = []
-        conditionString = ''
-        triggers = []
-        for rowW in conndb4.fetchall():
-            triggers.append(rowW[4])
-            if rowW[4] == 'date':
-                conditions.append(eval("strptime('"+rowW[6]+"','%Y-%m-%d %H:%M')"+rowW[5]+"datetime.utcnow().replace(microsecond=0,second=0)"))
-            elif rowW[4] == 'hour':
-                triggerHour = datetime.strptime(rowW[6],'%H:%M')
-                currentHour = datetime.utcnow().replace(1900,1,1,microsecond=0,second=0)
-                conditions.append(eval('triggerHour'+rowW[5]+'currentHour'))
-            elif rowW[4] == 'timer':
-                timelist = rowW[6].split(",")
-                if rowW[0] not in trigger_timer or trigger_timer[rowW[0]][0] != int(timelist[0])*1000:
-                    trigger_timer[rowW[0]] = (int(timelist[0])*1000,int(timelist[1])*1000,int(round(time.time()*1000)))
-                timeS = trigger_timer[rowW[0]][1] - (int(round(time.time()*1000)) - trigger_timer[rowW[0]][2])
-                conditions.append(timeS <= 0)
-                if timeS > 0:
-                    trigger_timer[rowW[0]] =(trigger_timer[rowW[0]][0],timeS,int(round(time.time()*1000)))
-                    if updateCD <= 0:
-                        conndb4.execute("UPDATE wyzwalaczeAkcji set Dane=%s where Id=%s", (str(trigger_timer[rowW[0]][0]/1000)+','+str(timeS/1000), rowW[0]))
-                else:
-                    trigger_timer[rowW[0]] = (trigger_timer[rowW[0]][0],trigger_timer[rowW[0]][0],int(round(time.time()*1000)))
-            elif rowW[4] == 'sensor':
-                sensorValue = getCurrentSensorValue(rowW[2],conndb4)
-                conditions.append(eval(str(sensorValue)+rowW[5]+rowW[6]))
-            elif rowW[4] == 'weekday':
-                conditions.append(eval("datetime.now().weekday()"+rowW[5]+rowW[6]))
-            elif rowW[4] == 'i/o':
-                planned = int(rowW[6])
-                cState = int(rowW[21])
-                reverse = int(rowW[25])
-                conditions.append(True if ((planned==cState and not reverse) or (planned==2 and planned==cState) or (planned!=cState and reverse and planned!=2)) else False)
-            elif rowW[4] == 'pwm state':
-                conditions.append(int(rowW[6]) == int(rowW[32]))
-            elif rowW[4] == 'pwm fr':
-                conditions.append(eval(str(rowW[30])+rowW[5]+rowW[6]) and int(rowW[32] == 1))
-            elif rowW[4] == 'pwm dc':
-                conditions.append(eval(str(rowW[31])+rowW[5]+rowW[6]) and int(rowW[32] == 1))
-            elif rowW[4] == 'in chain':
-                conditions.append(eval(rowW[6]+rowW[5]+str(idCE != 0)))
-            elif rowW[4] == 'ping':
-                response = os.system("ping -c 1 -w 2 -t 2 "+rowW[2]+" > /dev/null 2>&1")
-                if response == 0: isPinging = True
-                else: isPinging = False
-                conditions.append(eval(rowW[6]+rowW[5]+str(isPinging)))
-            elif rowW[4] == 'rfrecived':
-                conndb4.execute("select h.Id from rfHistoria h left join rf r on h.Id = r.Id where Type LIKE 'Recive' and Timestamp >= %s and h.Id = %s",(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),rowW[2]))
-                conditions.append(eval(rowW[6]+rowW[5]+str(bool(conndb4.rowcount))))
-            elif rowW[4] == 'cmd':
-                execCmd = execCustomCmd(conndb4,rowW[2],changedBy,False,True)
-                if execCmd[0]: conditions.append(eval(str(execCmd[1]).rstrip()+rowW[5]+rowW[6]))
-                else: conditions.append(False)
-            elif rowW[4] == 'i/o link':
-                res = callLinkedPi(rowW[7],'Get_GPIO;'+rowW[2],conndb4)
-                # print res
-                if res:
-                    planned = int(rowW[6])
-                    cState = int(res[4])
-                    reverse = int(res[8])
-                    conditions.append(True if ((planned==cState and not reverse) or (planned==2 and planned==cState) or (planned!=cState and reverse and planned!=2)) else False)
-                else: conditions.append(False)
-            elif rowW[4] == 'sensor link':
-                res = callLinkedPi(rowW[7],'SENSOR_value;'+rowW[2],conndb4,1)
-                if res:
-                    conditions.append(eval(res[2]+rowW[5]+rowW[6]))
-                else: conditions.append(False)
-            elif rowW[4] == 'rfrecived link':
-                res = callLinkedPi(rowW[7],'GetRfRecivedNow;'+rowW[2],conndb4,1)
-                if res:
-                    conditions.append(eval(rowW[6]+rowW[5]+str(bool(int(res[2])))))
-                else: conditions.append(False)
-        # print str(id)+str(conditions)
-        if len(conditions) > 0:
-            if row[3] == None or not row[3]:
-                i=1
-                for cond in conditions:
-                    if len(conditions)==i:
-                        conditionString+=str(cond)
+        try:
+            conndb4.execute("SELECT * FROM akcje WHERE Id = %s",(id,))
+            row = conndb4.fetchone()
+            if row is None: sys.exit()
+            conndb4.execute("SELECT * FROM wyzwalaczeAkcji w left join sensory s on w.Id_s = s.Id left join stany st on w.Id_s = CAST(st.Id AS TEXT) left join pwm p on w.Id_s = CAST(p.Id AS TEXT) left join rf r on w.Id_s=CAST(r.Id AS TEXT) left join globalVariables v on w.Id_s=CAST(v.Id AS TEXT) WHERE w.Id_a = %s ORDER BY w.Lp",(row[0],))
+            conditions = []
+            conditionString = ''
+            triggers = []
+            for rowW in conndb4.fetchall():
+                triggers.append(rowW[4])
+                if rowW[4] == 'date':
+                    conditions.append(eval("strptime('"+rowW[6]+"','%Y-%m-%d %H:%M')"+rowW[5]+"datetime.utcnow().replace(microsecond=0,second=0)"))
+                elif rowW[4] == 'hour':
+                    triggerHour = datetime.strptime(rowW[6],'%H:%M')
+                    currentHour = datetime.utcnow().replace(1900,1,1,microsecond=0,second=0)
+                    conditions.append(eval('triggerHour'+rowW[5]+'currentHour'))
+                elif rowW[4] == 'timer':
+                    timelist = rowW[6].split(",")
+                    if rowW[0] not in trigger_timer or trigger_timer[rowW[0]][0] != int(timelist[0])*1000:
+                        trigger_timer[rowW[0]] = (int(timelist[0])*1000,int(timelist[1])*1000,int(round(time.time()*1000)))
+                    timeS = trigger_timer[rowW[0]][1] - (int(round(time.time()*1000)) - trigger_timer[rowW[0]][2])
+                    conditions.append(timeS <= 0)
+                    if timeS > 0:
+                        trigger_timer[rowW[0]] =(trigger_timer[rowW[0]][0],timeS,int(round(time.time()*1000)))
+                        if updateCD <= 0:
+                            conndb4.execute("UPDATE wyzwalaczeAkcji set Dane=%s where Id=%s", (str(trigger_timer[rowW[0]][0]/1000)+','+str(timeS/1000), rowW[0]))
                     else:
-                        conditionString+=str(cond)+" and "
-                    i+=1
-            else:
-                i=1
-                conditionString = row[3]
-                for cond in conditions:
-                    conditionString = re.sub('#'+str(i)+'#', str(cond), conditionString)
-                    i+=1
-            conjunctionValid = True
-            try:
-                eval(str(conditionString))
-            except:
-                pass
-                log.error("Wrong conjunction at "+row[10]+":"+str(conditionString))
-                conjunctionValid = False
-            noe = int(row[2])
-            if conditionString != '' and conjunctionValid and (noe > 0 or noe == -1):
-                if eval(str(conditionString)):
-                    execuded = False
-                    lastExecTime = strptime(row[11],'%Y-%m-%d %H:%M:%S.%f').replace(microsecond=0,second=0)
-                    currentTime = datetime.utcnow().replace(microsecond=0,second=0)
-                    isThereTimeTrigger = False
-                    if ('date' in triggers or 'hour' in triggers) and 'cmd' not in triggers and 'sensors' not in triggers and 'rfrecived' not in triggers:
-                        isThereTimeTrigger = True
-                    if (row[1] == 'output' and not isThereTimeTrigger) or (row[1] == 'output' and isThereTimeTrigger and lastExecTime != currentTime):
-                        execuded = outputChange(int(row[5]),row[4],conndb4,changedBy,True if row[13] else False)
-                    elif (row[1] == 'pwm' and not isThereTimeTrigger) or (row[1] == 'pwm' and isThereTimeTrigger and lastExecTime != currentTime):
-                        execuded = pwmChange(row[9],row[8],row[7],row[6],conndb4,changedBy,True if row[13] else False)
-                    elif (row[1] == 'chain' and not isThereTimeTrigger) or (row[1] == 'chain' and isThereTimeTrigger and lastExecTime != currentTime):
-                        if int(row[5]): threading.Thread(target=chainExecude, args=(row[12], changedBy, True if row[13] else False)).start()
-                        else: conndb4.execute("UPDATE lancuchy set Status=0 WHERE Id=%s",(row[12],))
-                        execuded = True
-                    elif (row[1] == 'rfsend' and not isThereTimeTrigger) or (row[1] == 'rfsend' and isThereTimeTrigger and lastExecTime != currentTime):
-                        sendRfCode(conndb4,row[14],False,True if row[13] else False)
-                        execuded = True
-                    elif (row[1] == 'cmd' and not isThereTimeTrigger) or (row[1] == 'cmd' and isThereTimeTrigger and lastExecTime != currentTime):
-                        execCustomCmd(conndb4,row[16],changedBy,True if row[13] else False)
-                        execuded = True
-                    if noe > 0 and execuded:
-                        conndb4.execute("UPDATE akcje set Rodzaj=%s,Edit_time=%s where Id = %s", (str(noe-1),datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),row[0]))
-                    elif execuded:
-                        conndb4.execute("UPDATE akcje set Edit_time=%s where Id = %s", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),row[0]))
-                    # conndb4.commit()
-            elif noe <= 0: break
-        if row[15] is not None: sleepTime = float(row[15])
-        else: sleepTime = 0.3
-        if idCE != 0: break
-        if updateCD <= 0: updateCD = 30
-        updateCD -= (time.time()-startTime)
-        startTime = time.time()
-        time.sleep(sleepTime)
-        # except Exception as e:
-        #     log.error("Error: "+e.message)
-        #     print e
+                        trigger_timer[rowW[0]] = (trigger_timer[rowW[0]][0],trigger_timer[rowW[0]][0],int(round(time.time()*1000)))
+                elif rowW[4] == 'sensor':
+                    sensorValue = getCurrentSensorValue(rowW[2],conndb4)
+                    conditions.append(eval(str(sensorValue)+rowW[5]+rowW[6]))
+                elif rowW[4] == 'weekday':
+                    conditions.append(eval("datetime.now().weekday()"+rowW[5]+rowW[6]))
+                elif rowW[4] == 'i/o':
+                    planned = int(rowW[6])
+                    cState = int(rowW[21])
+                    reverse = int(rowW[25])
+                    conditions.append(True if ((planned==cState and not reverse) or (planned==2 and planned==cState) or (planned!=cState and reverse and planned!=2)) else False)
+                elif rowW[4] == 'pwm state':
+                    conditions.append(int(rowW[6]) == int(rowW[32]))
+                elif rowW[4] == 'pwm fr':
+                    conditions.append(eval(str(rowW[30])+rowW[5]+rowW[6]) and int(rowW[32] == 1))
+                elif rowW[4] == 'pwm dc':
+                    conditions.append(eval(str(rowW[31])+rowW[5]+rowW[6]) and int(rowW[32] == 1))
+                elif rowW[4] == 'in chain':
+                    conditions.append(eval(rowW[6]+rowW[5]+str(idCE != 0)))
+                elif rowW[4] == 'ping':
+                    response = os.system("ping -c 1 -w 2 -t 2 "+rowW[2]+" > /dev/null 2>&1")
+                    if response == 0: isPinging = True
+                    else: isPinging = False
+                    conditions.append(eval(rowW[6]+rowW[5]+str(isPinging)))
+                elif rowW[4] == 'rfrecived':
+                    conndb4.execute("select h.Id from rfHistoria h left join rf r on h.Id = r.Id where Type LIKE 'Recive' and Timestamp >= %s and h.Id = %s",(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),rowW[2]))
+                    conditions.append(eval(rowW[6]+rowW[5]+str(bool(conndb4.rowcount))))
+                elif rowW[4] == 'cmd':
+                    execCmd = execCustomCmd(conndb4,rowW[2],changedBy,False,True)
+                    if execCmd[0]: conditions.append(eval(str(execCmd[1]).rstrip()+rowW[5]+rowW[6]))
+                    else: conditions.append(False)
+                elif rowW[4] == 'var':
+                    if rowW[47] == "String": conditions.append(eval("'"+str(rowW[46])+"'"+rowW[5]+"'"+str(rowW[6])+"'"))
+                    elif rowW[47] == "Date": conditions.append(eval("strptime('"+rowW[46]+"','%Y-%m-%d %H:%M')"+rowW[5]+"strptime('"+rowW[6]+"','%Y-%m-%d %H:%M')"))
+                    elif rowW[47] == "Time":
+                        triggerHour = datetime.strptime(rowW[6],'%H:%M')
+                        varHour = datetime.strptime(rowW[46],'%H:%M')
+                        conditions.append(eval('varHour'+rowW[5]+'triggerHour'))
+                    else: conditions.append(eval(str(rowW[46])+rowW[5]+rowW[6]))
+                elif rowW[4] == 'i/o link':
+                    res = callLinkedPi(rowW[7],'Get_GPIO;'+rowW[2],conndb4)
+                    # print res
+                    if res:
+                        planned = int(rowW[6])
+                        cState = int(res[4])
+                        reverse = int(res[8])
+                        conditions.append(True if ((planned==cState and not reverse) or (planned==2 and planned==cState) or (planned!=cState and reverse and planned!=2)) else False)
+                    else: conditions.append(False)
+                elif rowW[4] == 'sensor link':
+                    res = callLinkedPi(rowW[7],'SENSOR_value;'+rowW[2],conndb4,1)
+                    if res:
+                        conditions.append(eval(res[2]+rowW[5]+rowW[6]))
+                    else: conditions.append(False)
+                elif rowW[4] == 'rfrecived link':
+                    res = callLinkedPi(rowW[7],'GetRfRecivedNow;'+rowW[2],conndb4,1)
+                    if res:
+                        conditions.append(eval(rowW[6]+rowW[5]+str(bool(int(res[2])))))
+                    else: conditions.append(False)
+                elif rowW[4] == 'var link':
+                    res = callLinkedPi(rowW[7],'GetGlobalVar;'+rowW[2],conndb4,1)
+                    if res:
+                        if res[3] == 'String': conditions.append(eval("'"+str(res[2])+"'"+rowW[5]+"'"+str(rowW[6])+"'"))
+                        elif res[3] == "Date": conditions.append(eval("strptime('"+res[2]+"','%Y-%m-%d %H:%M')"+rowW[5]+"strptime('"+rowW[6]+"','%Y-%m-%d %H:%M')"))
+                        elif res[3] == "Time":
+                            triggerHour = datetime.strptime(rowW[6],'%H:%M')
+                            varHour = datetime.strptime(res[2],'%H:%M')
+                            conditions.append(eval('varHour'+rowW[5]+'triggerHour'))
+                        else: conditions.append(eval(res[2]+rowW[5]+rowW[6]))
+                    else: conditions.append(False)
+            # print str(id)+str(conditions)
+            if len(conditions) > 0:
+                if row[3] == None or not row[3]:
+                    i=1
+                    for cond in conditions:
+                        if len(conditions)==i:
+                            conditionString+=str(cond)
+                        else:
+                            conditionString+=str(cond)+" and "
+                        i+=1
+                else:
+                    i=1
+                    conditionString = row[3]
+                    for cond in conditions:
+                        conditionString = re.sub('#'+str(i)+'#', str(cond), conditionString)
+                        i+=1
+                conjunctionValid = True
+                try:
+                    eval(str(conditionString))
+                except:
+                    pass
+                    log.error("Wrong conjunction at "+row[10]+":"+str(conditionString))
+                    conjunctionValid = False
+                noe = int(row[2])
+                if conditionString != '' and conjunctionValid and (noe > 0 or noe == -1):
+                    if eval(str(conditionString)):
+                        execuded = False
+                        lastExecTime = strptime(row[11],'%Y-%m-%d %H:%M:%S.%f').replace(microsecond=0,second=0)
+                        currentTime = datetime.utcnow().replace(microsecond=0,second=0)
+                        isThereTimeTrigger = False
+                        if ('date' in triggers or 'hour' in triggers) and 'cmd' not in triggers and 'sensors' not in triggers and 'rfrecived' not in triggers:
+                            isThereTimeTrigger = True
+                        if (row[1] == 'output' and not isThereTimeTrigger) or (row[1] == 'output' and isThereTimeTrigger and lastExecTime != currentTime):
+                            execuded = outputChange(int(row[5]),row[4],conndb4,changedBy,True if row[13] else False)
+                        elif (row[1] == 'pwm' and not isThereTimeTrigger) or (row[1] == 'pwm' and isThereTimeTrigger and lastExecTime != currentTime):
+                            execuded = pwmChange(row[9],row[8],row[7],row[6],conndb4,changedBy,True if row[13] else False)
+                        elif (row[1] == 'chain' and not isThereTimeTrigger) or (row[1] == 'chain' and isThereTimeTrigger and lastExecTime != currentTime):
+                            if int(row[5]): threading.Thread(target=chainExecude, args=(row[12], changedBy, True if row[13] else False)).start()
+                            else: conndb4.execute("UPDATE lancuchy set Status=0 WHERE Id=%s",(row[12],))
+                            execuded = True
+                        elif (row[1] == 'rfsend' and not isThereTimeTrigger) or (row[1] == 'rfsend' and isThereTimeTrigger and lastExecTime != currentTime):
+                            sendRfCode(conndb4,row[14],False,True if row[13] else False)
+                            execuded = True
+                        elif (row[1] == 'cmd' and not isThereTimeTrigger) or (row[1] == 'cmd' and isThereTimeTrigger and lastExecTime != currentTime):
+                            execCustomCmd(conndb4,row[16],changedBy,True if row[13] else False)
+                            execuded = True
+                        elif (row[1] == 'var' and not isThereTimeTrigger) or (row[1] == 'var' and isThereTimeTrigger and lastExecTime != currentTime):
+                            conndb4.execute("UPDATE globalVariables set Val=%s,Timestamp=%s where Id=%s",(str(row[20]),datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),str(row[19])))
+                            execuded = True
+                        elif (row[1] == 'action_noe' and not isThereTimeTrigger) or (row[1] == 'action_noe' and isThereTimeTrigger and lastExecTime != currentTime):
+                            conndb4.execute("UPDATE akcje set Rodzaj=%s, Edit_time=%s where Id=%s", (str(row[22]), datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),str(row[21])))
+                            execuded = True
+                        elif (row[1] == 'chain_ec' and not isThereTimeTrigger) or (row[1] == 'chain_ec' and isThereTimeTrigger and lastExecTime != currentTime):
+                            conndb4.execute("Update lancuchy SET Edit_time=%s,ExecCountdown=%s WHERE Id=%s",(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),str(row[23]),str(row[12])))
+                            execuded = True
+                        if noe > 0 and execuded:
+                            conndb4.execute("UPDATE akcje set Rodzaj=%s,Edit_time=%s where Id = %s", (str(noe-1),datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),row[0]))
+                        elif execuded:
+                            conndb4.execute("UPDATE akcje set Edit_time=%s where Id = %s", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),row[0]))
+                        # conndb4.commit()
+                elif noe <= 0: break
+            if row[15] is not None: sleepTime = float(row[15])
+            else: sleepTime = 0.3
+            if idCE != 0: break
+            if updateCD <= 0: updateCD = 30
+            updateCD -= (time.time()-startTime)
+            startTime = time.time()
+            time.sleep(sleepTime)
+        except Exception as e:
+            log.error(e.message)
+            log.error(traceback.format_exc())
     conndb4.close()
     conn.close()
     sys.exit()
@@ -312,6 +348,15 @@ def chainExecude(id,changedBy,log=True):
                     elif int(row[7]) and not row[14]: chainExecude(row[16],changedBy,log)
                     elif not int(row[7]) and row[14]: callLinkedPi(row[14],'GPIO_ChainCancel;'+str(row[16])+';'+changedBy,conndb,15)
                     else: conndb.execute("UPDATE lancuchy set Status=0 WHERE Id=%s",(row[12],))
+                elif row[4] == 'var':
+                    if row[14]: callLinkedPi(row[14],'SetGlobalVar;'+str(row[17])+';'+str(row[18])+';'+changedBy+';'+str(int(log)),conndb,15)
+                    else: conndb.execute("UPDATE globalVariables set Val=%s,Timestamp=%s where Id=%s",(str(row[18]),datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),str(row[17])))
+                elif row[4] == 'action_noe':
+                    if row[14]: callLinkedPi(row[14],'SetActionNOE;'+str(row[5])+';'+str(row[19])+';'+changedBy+';'+str(int(log)),conndb,15)
+                    else: conndb.execute("UPDATE akcje set Rodzaj=%s, Edit_time=%s where Id=%s", (str(row[19]), datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),str(row[5])))
+                elif row[4] == 'chain_ec':
+                    if row[14]: callLinkedPi(row[14],'SetChainEC;'+str(row[16])+';'+str(row[20])+';'+changedBy+';'+str(int(log)),conndb,15)
+                    else: conndb.execute("Update lancuchy SET Edit_time=%s,ExecCountdown=%s WHERE Id=%s",(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),str(row[20]),str(row[16])))
                 if (len(chainBonds)) == row[2] and countdown == 1:
                     conndb.execute("UPDATE lancuchy SET Status=%s,Edit_time=%s WHERE Id=%s",(0,datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),id))
                     if log: conndb.execute("INSERT INTO historia(Typ, Id_c, Stan) VALUES(%s,%s,%s)", (changedBy, id, "END"))
@@ -494,7 +539,7 @@ def newDBConnP():
     connectionString = "dbname='{}' user='{}' host='{}' password='{}'".format(parser.get('postgresql','db'),parser.get('postgresql','user'),parser.get('postgresql','host'),parser.get('postgresql','password'))
     conn = psycopg2.connect(connectionString)
     conn.set_session(autocommit=True)
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=DictCursor)
     return conn,cur
 
 def callLinkedPi(id,data,conndb,timeout=5):
@@ -519,10 +564,9 @@ def callLinkedPi(id,data,conndb,timeout=5):
             f.close()
         if response[0] == 'false': raise Exception(response[1])
         if row[3]: response = decrypt(L_ENC_KEY,response[1]).split(';')
-        print response
+        #print response
         return response
     except Exception as e:
-        print e.message
         log.error(e)
         return False
 
@@ -851,13 +895,13 @@ def requestMethod(data):
             conndb.execute("UPDATE akcje set Cpu_usage=0, Rodzaj=%s, Edit_time=%s where Id=%s", (datalist[3], datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'), datalist[2]))
             reply = 'true;startStopASA;'
         elif datalist[1] == 'GPIO_ASAlist':
-            cursor = conndb.execute("SELECT * from akcje a left join stany s on a.Out_id = s.Id left join pwm p on a.Pwm_id = p.Id left join lancuchy l on a.Chain_id = l.Id left join rf r on a.Rf_id = r.Id left join customCmds c on a.Cmd_id = c.Id ORDER BY a.Id DESC")
+            cursor = conndb.execute('SELECT a.id as "a_id", a.typ as "a_type", a.rodzaj as "a_noe", a.koniunkcja, a.out_id, a.out_stan, a.pwm_id, a.pwm_fr, a.pwm_dc, a.pwm_ss, a.nazwa as "a_name", s.name as "out_name",s.reverse as "out_reverse", p.name as "pwm_name",a.chain_id, a.log as "a_log",l.nazwa as "chain_name", a.rf_id, r.name as "rf_name", a.cmd_id, c.name as "cmd_name", a.refresh_rate, a.cpu_usage, a.v_id, a.v_val, v.name as "v_name", a.a_id, a.a_noe, a.chain_ec from akcje a left join stany s on a.Out_id = s.Id left join pwm p on a.Pwm_id = p.Id left join lancuchy l on a.Chain_id = l.Id left join rf r on a.Rf_id = r.Id left join customCmds c on a.Cmd_id = c.Id LEFT JOIN globalVariables v ON a.V_id = v.Id ORDER BY a.Id DESC')
             reply = 'true;GPIO_ASAlist;'
             for row in conndb.fetchall():
-                reply += ";".join(map(str, [row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[9],row[10],row[22],row[25],row[33],row[12],row[13],row[38],row[42],row[43],row[50],row[51],row[15],row[18]]))+";"
-                conndb.execute("SELECT * FROM wyzwalaczeAkcji w left join stany s on w.Id_s=CAST(s.Id AS TEXT) left join pwm p on w.Id_s=CAST(p.Id AS text) left join sensory se on w.Id_s=se.Id left join rf r on w.Id_s=CAST(r.Id AS TEXT) left join customCmds c on w.Id_s=CAST(c.Id AS TEXT) left join linkedPis l on w.Id_link = l.Id WHERE w.Id_a=%s ORDER BY w.Lp",(str(row[0]),))
+                reply += ";".join(map(str, [row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[9],row[10],row[11],row[12],row[13],row[14],row[15],row[16],row[17],row[18],row[19],row[20],row[21],row[22],row[23],row[24],row[25],row[26],row[27],row[28]]))+";"
+                conndb.execute('SELECT w.id as "w_id",w.id_s as "w_sourceid",w.lp,w.warunek as "w_type",w.operator,w.dane as "w_data",s.name as "io_name",s.reverse,p.name as "pwm_name",se.name as "se_name",se.unit,r.name as "rf_name",c.name as "cmd_name",w.id_link,w.name_link,l.name as "link_dname", v.name as "v_name" FROM wyzwalaczeAkcji w left join stany s on w.Id_s=CAST(s.Id AS TEXT) left join pwm p on w.Id_s=CAST(p.Id AS text) left join sensory se on w.Id_s=se.Id left join rf r on w.Id_s=CAST(r.Id AS TEXT) left join customCmds c on w.Id_s=CAST(c.Id AS TEXT) left join linkedPis l on w.Id_link = l.Id left join globalVariables v on w.Id_s=CAST(v.Id AS TEXT) WHERE w.Id_a=%s ORDER BY w.Lp',(str(row[0]),))
                 for row1 in conndb.fetchall():
-                    reply+=str(row1[0])+'$'+str(row1[2])+'$'+str(row1[3])+'$'+str(row1[4])+'$'+str(row1[5])+'$'+str(row1[6])+'$'+str(row1[12])+'$'+str(row1[15])+'$'+str(row1[23])+'$'+str(row1[27])+'$'+str(row1[31])+'$'+str(row1[37])+'$'+str(row1[45])+'$'+str(row1[7])+'$'+str(row1[8])+'$'+str(row1[49])+'$'
+                    reply+=str(row1[0])+'$'+str(row1[1])+'$'+str(row1[2])+'$'+str(row1[3])+'$'+str(row1[4])+'$'+str(row1[5])+'$'+str(row1[6])+'$'+str(row1[7])+'$'+str(row1[8])+'$'+str(row1[9])+'$'+str(row1[10])+'$'+str(row1[11])+'$'+str(row1[12])+'$'+str(row1[13])+'$'+str(row1[14])+'$'+str(row1[15])+'$'+str(row1[16])+'$'
                 reply+=';'
         elif datalist[1] == 'GPIO_ASA_Add':
             if datalist[3] == 'output':
@@ -875,6 +919,15 @@ def requestMethod(data):
             elif datalist[3] == 'cmd':
                 conndb.execute("INSERT INTO akcje(Nazwa, Typ, Cmd_id, Rodzaj, Edit_time, Log, Refresh_rate) VALUES(%s,%s,%s,%s,%s,%s,%s)", (
                     datalist[2], datalist[3], datalist[4], datalist[5], datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'), datalist[9],datalist[10]))
+            elif datalist[3] == 'var':
+                conndb.execute("INSERT INTO akcje(Nazwa, Typ, V_id, Rodzaj, V_val, Edit_time, Log, Refresh_rate) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)", (
+                    datalist[2], datalist[3], datalist[4], datalist[5], datalist[6], datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[9],datalist[10]))
+            elif datalist[3] == 'action_noe':
+                conndb.execute("INSERT INTO akcje(Nazwa, Typ, A_id, Rodzaj, A_noe, Edit_time, Log, Refresh_rate) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)", (
+                    datalist[2], datalist[3], datalist[4], datalist[5], datalist[6], datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[9],datalist[10]))
+            elif datalist[3] == 'chain_ec':
+                conndb.execute("INSERT INTO akcje(Nazwa, Typ, Chain_id, Rodzaj, Chain_ec, Edit_time, Log, Refresh_rate) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)", (
+                    datalist[2], datalist[3], datalist[4], datalist[5], datalist[6], datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[9],datalist[10]))
             reply = 'true;GPIO_ASA_Add;'
         elif datalist[1] == 'GPIO_ASA_Update':
             if datalist[3] == 'output':
@@ -892,6 +945,15 @@ def requestMethod(data):
             elif datalist[3] == 'cmd':
                 conndb.execute("UPDATE akcje set Nazwa=%s, Typ=%s, Cmd_id=%s, Rodzaj=%s, Edit_time=%s, Log=%s, Refresh_rate=%s where Id=%s", (
                     datalist[2], datalist[3], datalist[4], datalist[5], datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[10],datalist[11], datalist[9]))
+            elif datalist[3] == 'var':
+                conndb.execute("UPDATE akcje set Nazwa=%s, Typ=%s, V_id=%s, Rodzaj=%s, V_val=%s, Edit_time=%s, Log=%s, Refresh_rate=%s where Id=%s", (
+                    datalist[2], datalist[3], datalist[4], datalist[5], datalist[6], datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[10],datalist[11], datalist[9]))
+            elif datalist[3] == 'action_noe':
+                conndb.execute("UPDATE akcje set Nazwa=%s, Typ=%s, A_id=%s, Rodzaj=%s, A_noe=%s, Edit_time=%s, Log=%s, Refresh_rate=%s where Id=%s", (
+                    datalist[2], datalist[3], datalist[4], datalist[5], datalist[6], datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[10],datalist[11], datalist[9]))
+            elif datalist[3] == 'chain_ec':
+                conndb.execute("UPDATE akcje set Nazwa=%s, Typ=%s, Chain_id=%s, Rodzaj=%s, Chain_ec=%s, Edit_time=%s, Log=%s, Refresh_rate=%s where Id=%s", (
+                    datalist[2], datalist[3], datalist[4], datalist[5], datalist[6], datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[10],datalist[11], datalist[9]))
             reply = 'true;GPIO_ASA_Update;'
         elif datalist[1] == 'GPIO_ASA_Delete':
             conndb.execute("DELETE from akcje where Id=%s", (datalist[2],))
@@ -943,9 +1005,11 @@ def requestMethod(data):
             reply = 'true;GPIO_ChainList;'
             for row in conndb.fetchall():
                 reply+=str(row[0])+';'+str(row[1])+';'+str(row[2])+';'+str(row[3])+';'+str(row[4])+';'+str(row[5])+';'
-                conndb.execute("SELECT * FROM spoiwaLancuchow s LEFT JOIN stany st ON s.Out_id = st.Id LEFT JOIN pwm p ON s.Pwm_id = p.Id LEFT JOIN akcje a ON s.A_id = a.Id LEFT JOIN rf r ON s.Rf_id = r.Id LEFT JOIN customCmds c ON s.Cmd_id = c.Id LEFT JOIN linkedPis l ON s.Link_id = l.Id WHERE s.Id_c = %s ORDER BY Lp",(str(row[0]),))
+                #conndb.execute("SELECT * FROM spoiwaLancuchow s LEFT JOIN stany st ON s.Out_id = st.Id LEFT JOIN pwm p ON s.Pwm_id = p.Id LEFT JOIN akcje a ON s.A_id = a.Id LEFT JOIN rf r ON s.Rf_id = r.Id LEFT JOIN customCmds c ON s.Cmd_id = c.Id LEFT JOIN linkedPis l ON s.Link_id = l.Id LEFT JOIN globalVariables v ON s.V_id = v.Id WHERE s.Id_c = %s ORDER BY Lp",(str(row[0]),))
+                conndb.execute('SELECT s.id as "b_id",s.id_c,lp,dalay,s.typ as "b_type",s.a_id,s.out_id,s.out_stan,s.pwm_id,s.pwm_fr,s.pwm_dc,s.pwm_ss,st.name as "out_name", p.name as "pwm_name", a.nazwa as "a_name", s.rf_id, r.name as "rf_name", s.cmd_id, c.name as "cmd_name",s.link_id,s.link_name,l.name as "link_dname",s.c_id,s.v_id,s.v_val,v.name as "v_name",s.a_noe,s.c_ec FROM spoiwaLancuchow s LEFT JOIN stany st ON s.Out_id = st.Id LEFT JOIN pwm p ON s.Pwm_id = p.Id LEFT JOIN akcje a ON s.A_id = a.Id LEFT JOIN rf r ON s.Rf_id = r.Id LEFT JOIN customCmds c ON s.Cmd_id = c.Id LEFT JOIN linkedPis l ON s.Link_id = l.Id LEFT JOIN globalVariables v ON s.V_id = v.Id WHERE s.Id_c = %s ORDER BY Lp',(str(row[0]),))
                 for row1 in conndb.fetchall():
-                    reply+="$".join(map(str, [row1[0],row1[1],row1[2],row1[3],row1[4],row1[5],row1[6],row1[7],row1[8],row1[9],row1[10],row1[11],row1[20],row1[31],row1[44],row1[51],row1[52],row1[59],row1[60],row1[14],row1[15],row1[64],row1[16]]))+"$"
+                    #reply+="$".join(map(str, [row1[0],row1[1],row1[2],row1[3],row1[4],row1[5],row1[6],row1[7],row1[8],row1[9],row1[10],row1[11],row1[22],row1[33],row1[46],row1[53],row1[54],row1[61],row1[62],row1[14],row1[15],row1[66],row1[16],row1[17],row1[18],row1[74]]))+"$"
+                    reply+="$".join(map(str, [row1[0],row1[1],row1[2],row1[3],row1[4],row1[5],row1[6],row1[7],row1[8],row1[9],row1[10],row1[11],row1[12],row1[13],row1[14],row1[15],row1[16],row1[17],row1[18],row1[19],row1[20],row1[21],row1[22],row1[23],row1[24],row1[25],row1[26],row1[27]]))+"$"
                 reply+=';'
         elif datalist[1] == 'GPIO_ChainExecute':
             threading.Thread(target=chainExecude, args=(datalist[2], datalist[4],True if int(datalist[3]) else False)).start()
@@ -960,11 +1024,11 @@ def requestMethod(data):
             conndb.execute("Update lancuchy SET Nazwa=%s,Edit_time=%s,ExecCountdown=%s,Log=%s WHERE Id=%s",(datalist[3],datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[4],datalist[5],datalist[2]))
             reply = 'true;GPIO_ChainUpdate;'
         elif datalist[1] == 'GPIO_ChainDelete':
-            conndb.execute("DELETE FROM lancuchy WHERE Id=%s",(datalist[2]))
-            conndb.execute("DELETE FROM spoiwaLancuchow WHERE Id_c=%s",(datalist[2]))
-            conndb.execute("DELETE FROM spoiwaLancuchow WHERE C_id=%s",(datalist[2]))
+            conndb.execute("DELETE FROM lancuchy WHERE Id=%s",(str(datalist[2]),))
+            conndb.execute("DELETE FROM spoiwaLancuchow WHERE Id_c=%s",(str(datalist[2]),))
+            conndb.execute("DELETE FROM spoiwaLancuchow WHERE C_id=%s",(str(datalist[2]),))
             conndb.execute("UPDATE lancuchy set Edit_time=%s where Id in (SELECT Id FROM lancuchy LIMIT 1)", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),))
-            conndb.execute("DELETE FROM akcje WHERE Chain_id=%s", (datalist[2],))
+            conndb.execute("DELETE FROM akcje WHERE Chain_id=%s", (str(datalist[2]),))
             if conndb.rowcount > 0:
                 conndb.execute("UPDATE akcje set Edit_time=%s where Id in (SELECT Id FROM akcje LIMIT 1)", (
                     datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),))
@@ -998,6 +1062,12 @@ def requestMethod(data):
                 conndb.execute("INSERT INTO spoiwaLancuchow(Id_c, Typ, Dalay, Cmd_id, Lp, Link_id, Link_name) VALUES(%s,%s,%s,%s,%s,%s,%s)", (datalist[2], datalist[3], datalist[4], datalist[5],(int(rowcount)+1),datalist[9],datalist[10]))
             elif datalist[3] == 'chain':
                 conndb.execute("INSERT INTO spoiwaLancuchow(Id_c, Typ, Dalay, C_id, Out_stan, Lp, Link_id, Link_name) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)", (datalist[2], datalist[3], datalist[4], datalist[5], datalist[6],(int(rowcount)+1),datalist[9],datalist[10]))
+            elif datalist[3] == 'var':
+                conndb.execute("INSERT INTO spoiwaLancuchow(Id_c, Typ, Dalay, V_id, V_val, Lp, Link_id, Link_name) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)", (datalist[2], datalist[3], datalist[4], datalist[5], datalist[6],(int(rowcount)+1),datalist[9],datalist[10]))
+            elif datalist[3] == 'action_noe':
+                conndb.execute("INSERT INTO spoiwaLancuchow(Id_c, Typ, Dalay, A_id, A_noe, Lp, Link_id, Link_name) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)", (datalist[2], datalist[3], datalist[4], datalist[5], datalist[6],(int(rowcount)+1),datalist[9],datalist[10]))
+            elif datalist[3] == 'chain_ec':
+                conndb.execute("INSERT INTO spoiwaLancuchow(Id_c, Typ, Dalay, C_id, C_ec, Lp, Link_id, Link_name) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)", (datalist[2], datalist[3], datalist[4], datalist[5], datalist[6],(int(rowcount)+1),datalist[9],datalist[10]))
             conndb.execute("UPDATE lancuchy SET Edit_time=%s WHERE Id=%s",(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[2]))
             reply = 'true;GPIO_ChainBondAdd;'
         elif datalist[1] == 'GPIO_ChainBondUpdate':
@@ -1013,6 +1083,12 @@ def requestMethod(data):
                 conndb.execute("UPDATE spoiwaLancuchow SET Typ=%s, Dalay=%s, Cmd_id=%s, Link_id=%s, Link_name=%s WHERE Id=%s", (datalist[3], datalist[4], datalist[5],datalist[10],datalist[11],datalist[9]))
             elif datalist[3] == 'chain':
                 conndb.execute("UPDATE spoiwaLancuchow SET Typ=%s, Dalay=%s, C_id=%s, Out_stan=%s, Link_id=%s, Link_name=%s WHERE Id=%s", (datalist[3], datalist[4], datalist[5], datalist[6],datalist[10],datalist[11], datalist[9]))
+            elif datalist[3] == 'var':
+                conndb.execute("UPDATE spoiwaLancuchow SET Typ=%s, Dalay=%s, V_id=%s, V_val=%s, Link_id=%s, Link_name=%s WHERE Id=%s", (datalist[3], datalist[4], datalist[5], datalist[6],datalist[10],datalist[11], datalist[9]))
+            elif datalist[3] == 'action_noe':
+                conndb.execute("UPDATE spoiwaLancuchow SET Typ=%s, Dalay=%s, A_id=%s, A_noe=%s, Link_id=%s, Link_name=%s WHERE Id=%s", (datalist[3], datalist[4], datalist[5], datalist[6],datalist[10],datalist[11], datalist[9]))
+            elif datalist[3] == 'chain_ec':
+                conndb.execute("UPDATE spoiwaLancuchow SET Typ=%s, Dalay=%s, C_id=%s, C_ec=%s, Link_id=%s, Link_name=%s WHERE Id=%s", (datalist[3], datalist[4], datalist[5], datalist[6],datalist[10],datalist[11], datalist[9]))
             conndb.execute("UPDATE lancuchy SET Edit_time=%s WHERE Id=%s",(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[2]))
             reply = 'true;GPIO_ChainBondUpdate;'
         elif datalist[1] == 'GPIO_ChainBondsOrder':
@@ -1032,13 +1108,15 @@ def requestMethod(data):
                 logs = os.popen('journalctl -u rgc.service -r -n 200 --no-pager').read()
                 reply = 'true;Server_logs;'+logs+";"
         elif datalist[1] == 'Server_logs_JSON':
-                logs = os.popen('journalctl -u rgc.service -r --since "14 days ago" --no-pager --output=export --utc -n 1000').read()
+                logs = os.popen('journalctl -u rgc.service -r --since "1 days ago" --no-pager --output=json --utc -p 0..5').read()
                 logsArr = logs.splitlines()
                 reply = 'true;Server_logs_JSON;'
                 for log in logsArr:
-                    singleLog = log.split('=')
-                    if singleLog[0] in ['__REALTIME_TIMESTAMP','PRIORITY','MESSAGE']:
-                        reply += singleLog[1].replace(';','$')+";"
+                    singleLog = json.loads(log)
+                    reply += singleLog['__REALTIME_TIMESTAMP']+";"+singleLog['PRIORITY']+";"+singleLog['MESSAGE'].replace(';','$')+";"
+                    # singleLog = log.split('=')
+                    # if singleLog[0] in ['__REALTIME_TIMESTAMP','PRIORITY','MESSAGE']:
+                    #     reply += singleLog[1].replace(';','$')+";"
         elif datalist[1] == 'Server_status':
             status = os.popen('systemctl status rgc.service').read()
             reply = 'true;Server_status;'+status+";"
@@ -1080,15 +1158,15 @@ def requestMethod(data):
                 reply += str(row[0])+';'+str(row[1])+';'+str(row[2])+';'+str(row[3])+';'+str(row[4])+';'
         elif datalist[1] == 'HR_selByCat':
             if datalist[4] == 'i/o':
-                cursor = conndb.execute("SELECT h.Id,Czas,Typ,s.Name,h.Stan FROM historia h JOIN stany s ON s.Id = h.Id_IO WHERE Czas between %s and %s order by Czas DESC", (datalist[2], datalist[3]))
+                cursor = conndb.execute("SELECT h.Id,Czas,Typ,s.Name,h.Stan FROM historia h JOIN stany s ON s.Id = h.Id_IO WHERE Czas between %s and %s order by Czas DESC LIMIT 1000", (datalist[2], datalist[3]))
             elif datalist[4] == 'pwm':
-                cursor = conndb.execute("SELECT h.Id,Czas,Typ,p.Name,h.Stan FROM historia h JOIN pwm p ON p.Id = h.Id_Pwm WHERE Czas between %s and %s order by Czas DESC", (datalist[2], datalist[3]))
+                cursor = conndb.execute("SELECT h.Id,Czas,Typ,p.Name,h.Stan FROM historia h JOIN pwm p ON p.Id = h.Id_Pwm WHERE Czas between %s and %s order by Czas DESC LIMIT 1000", (datalist[2], datalist[3]))
             elif datalist[4] == 'chain':
-                cursor = conndb.execute("SELECT h.Id,Czas,Typ,l.Nazwa,h.Stan FROM historia h JOIN lancuchy l ON l.Id = h.Id_c WHERE Czas between %s and %s order by Czas DESC", (datalist[2], datalist[3]))
+                cursor = conndb.execute("SELECT h.Id,Czas,Typ,l.Nazwa,h.Stan FROM historia h JOIN lancuchy l ON l.Id = h.Id_c WHERE Czas between %s and %s order by Czas DESC LIMIT 1000", (datalist[2], datalist[3]))
             elif datalist[4] == 'cmd':
-                cursor = conndb.execute("SELECT h.Id,Czas,Typ,c.Name,h.Stan FROM historia h JOIN customCmds c ON c.Id = h.Id_cmd WHERE Czas between %s and %s order by Czas DESC", (datalist[2], datalist[3]))
+                cursor = conndb.execute("SELECT h.Id,Czas,Typ,c.Name,h.Stan FROM historia h JOIN customCmds c ON c.Id = h.Id_cmd WHERE Czas between %s and %s order by Czas DESC LIMIT 1000", (datalist[2], datalist[3]))
             elif datalist[4] == 'all':
-                cursor = conndb.execute("SELECT h.Id,Czas,Typ,case when s.Name is NOT NULL then s.Name when p.Name is NOT NULL then p.Name when l.Nazwa is NOT NULL then l.Nazwa else c.Name end as MainName,h.Stan FROM historia h Left JOIN stany s ON s.Id = h.Id_IO left JOIN pwm p ON p.Id = h.Id_Pwm left JOIN lancuchy l ON l.Id = h.Id_c left JOIN customCmds c ON c.Id = h.Id_cmd where Czas between %s and %s order by Czas DESC", (datalist[2], datalist[3]))
+                cursor = conndb.execute("SELECT h.Id,Czas,Typ,case when s.Name is NOT NULL then s.Name when p.Name is NOT NULL then p.Name when l.Nazwa is NOT NULL then l.Nazwa else c.Name end as MainName,h.Stan FROM historia h Left JOIN stany s ON s.Id = h.Id_IO left JOIN pwm p ON p.Id = h.Id_Pwm left JOIN lancuchy l ON l.Id = h.Id_c left JOIN customCmds c ON c.Id = h.Id_cmd where Czas between %s and %s order by Czas DESC  LIMIT 1000", (datalist[2], datalist[3]))
             reply = 'true;HR_selByCat;'
             for row in conndb.fetchall():
                 reply += str(row[0])+';'+str(row[1])+';'+str(row[2])+';'+str(row[3])+';'+str(row[4])+';'
@@ -1239,6 +1317,37 @@ def requestMethod(data):
             with open('rgc-config.ini', 'wb') as configfile:
                 parser.write(configfile)
             reply = 'true;SetConfigSections;'
+        elif datalist[1] == 'GetGlobalVars':
+            cursor = conndb.execute("SELECT * from globalVariables ORDER BY Id DESC")
+            reply = 'true;GetGlobalVars;'
+            for row in conndb.fetchall():
+                reply += ";".join(map(str, row))+";"
+        elif datalist[1] == 'AddGlobalVar':
+            conndb.execute("INSERT INTO globalVariables(Name,Val,Type) VALUES(%s,%s,%s) RETURNING Id", (datalist[2],datalist[3],datalist[4]))
+            reply = 'true;AddGlobalVar;'+str(conndb.fetchone()[0])
+        elif datalist[1] == 'DeleteGlobalVar':
+            conndb.execute("DELETE from globalVariables where Id=%s", (datalist[2],))
+            conndb.execute("DELETE from akcje where V_id=%s", (datalist[2],))
+            conndb.execute("DELETE from wyzwalaczeAkcji where Id_s=%s and Warunek='var'", (datalist[2],))
+            conndb.execute("DELETE from spoiwaLancuchow where V_id=%s", (datalist[2],))
+            reply = 'true;DeleteGlobalVar;'+datalist[2]
+        elif datalist[1] == 'UpdateGlobalVar':
+            conndb.execute("UPDATE globalVariables set Name=%s,Val=%s,Type=%s,Timestamp=%s where Id=%s",(datalist[3],datalist[4],datalist[5],datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[2]))
+            reply = 'true;UpdateGlobalVar;'
+        elif datalist[1] == 'SetGlobalVar':
+            conndb.execute("UPDATE globalVariables set Val=%s,Timestamp=%s where Id=%s",(datalist[3],datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[2]))
+            reply = 'true;SetGlobalVar;'
+        elif datalist[1] == 'GetGlobalVar':
+            conndb.execute("SELECT Val,Type from globalVariables where Id=%s",(datalist[2],))
+            row = conndb.fetchone()
+            if len(row): reply = 'true;GetGlobalVar;'+str(row[0])+";"+str(row[1])+";"
+            else: reply = 'false;GetGlobalVar;Global variable not defined;'
+        elif datalist[1] == 'SetActionNOE':
+            conndb.execute("UPDATE akcje set Rodzaj=%s, Edit_time=%s where Id=%s", (datalist[3], datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[2]))
+            reply = 'true;SetActionNOE;'
+        elif datalist[1] == 'SetChainEC':
+            conndb.execute("Update lancuchy SET Edit_time=%s, ExecCountdown=%s WHERE Id=%s",(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),datalist[3],datalist[2]))
+            reply = 'true;SetChainEC;'
         else:
             reply = 'false;Connection OK, but no compabile method found, probably encryption error;'
             httpCode = 501
@@ -1266,7 +1375,13 @@ class UDPRequestHandler(SocketServer.DatagramRequestHandler):
         if debug: print("THREAD:{} FOR USER:{}".format(threading.current_thread().name,self.client_address[0]))
         data = self.request[0].strip()
         if debug and PASSWORD: print 'RECIVED_ENC: '+data
-        reply = requestMethod(data)[0]
+        reply = "false; Not found !"
+        try:
+            reply = requestMethod(data)[0]
+        except Exception as e:
+            log.error(e.message)
+            log.error(traceback.format_exc())
+            reply = "false;"+e.message
         self.wfile.write(reply)
         rebotOrRestartAfterReply()
 
@@ -1281,7 +1396,13 @@ class TCPRequestHandler(SocketServer.StreamRequestHandler):
             if "#EOF#" in line: break
             time.sleep(0.001)
         if debug: print("THREAD:{} FOR USER:{}".format(threading.current_thread().name,self.client_address[0]))
-        reply = requestMethod(data)[0]
+        reply = "false; Not found !"
+        try:
+            reply = requestMethod(data)[0]
+        except Exception as e:
+            log.error(e.message)
+            log.error(traceback.format_exc())
+            reply = "false;"+e.message
         reply = zlib.compress(reply).encode('base64')
         if debug: print "SIZE: "+str(sys.getsizeof(reply))+"b"
         self.request.sendall(reply)
@@ -1307,7 +1428,13 @@ class HTTPRequestHandler(SimpleHTTPRequestHandler):
             replyData = 'false' if PASSWORD=='' else 'true'
             self.send_response(200)
         else:
-            reply = requestMethod(data)
+            reply = ("false; Not found !",404)
+            try:
+                reply = requestMethod(data)
+            except Exception as e:
+                log.error(e.message)
+                log.error(traceback.format_exc())
+                reply = ("false;"+e.message,500)
             replyData = reply[0]
             self.send_response(reply[1]) #create header
         self.send_header("Content-Length", str(len(replyData)))
@@ -1391,7 +1518,12 @@ if __name__ == '__main__':
             Refresh_rate	NUMERIC,
             Cmd_id	INTEGER,
             Pid	INTEGER,
-            Cpu_usage NUMERIC
+            Cpu_usage NUMERIC,
+            V_id	INTEGER,
+            V_val	TEXT,
+            A_id    INTEGER,
+            A_noe	INTEGER,
+            Chain_ec	INTEGER
         );
         CREATE TABLE IF NOT EXISTS wyzwalaczeAkcji (
             Id	SERIAL NOT NULL PRIMARY KEY,
@@ -1429,7 +1561,11 @@ if __name__ == '__main__':
             Cmd_id	INTEGER,
             Link_id	INTEGER,
 	        Link_name	TEXT,
-            C_id	INTEGER
+            C_id	INTEGER,
+            V_id	INTEGER,
+            V_val	TEXT,
+            A_noe	INTEGER,
+            C_ec	INTEGER
         );
         CREATE TABLE IF NOT EXISTS rf (
             Id	SERIAL NOT NULL PRIMARY KEY,
@@ -1462,10 +1598,26 @@ if __name__ == '__main__':
             Mode	TEXT,
 	        Port	INTEGER
         );
+        CREATE TABLE IF NOT EXISTS globalVariables (
+            Id	SERIAL NOT NULL PRIMARY KEY,
+            Name	TEXT NOT NULL,
+            Val	TEXT,
+            Type	TEXT NOT NULL,
+            Timestamp    TIMESTAMP DEFAULT timezone('utc', now())
+        );
         ''')
     conndb.execute("ALTER TABLE lancuchy ADD COLUMN IF NOT EXISTS ExecCountdown INTEGER DEFAULT 1;")
     conndb.execute("ALTER TABLE spoiwaLancuchow ADD COLUMN IF NOT EXISTS C_id INTEGER;")
     conndb.execute("ALTER TABLE lancuchy ADD COLUMN IF NOT EXISTS Log INTEGER DEFAULT 1;")
+    conndb.execute("ALTER TABLE spoiwaLancuchow ADD COLUMN IF NOT EXISTS V_id INTEGER;")
+    conndb.execute("ALTER TABLE spoiwaLancuchow ADD COLUMN IF NOT EXISTS V_val TEXT;")
+    conndb.execute("ALTER TABLE akcje ADD COLUMN IF NOT EXISTS V_id INTEGER;")
+    conndb.execute("ALTER TABLE akcje ADD COLUMN IF NOT EXISTS V_val TEXT;")
+    conndb.execute("ALTER TABLE spoiwaLancuchow ADD COLUMN IF NOT EXISTS A_noe INTEGER;")
+    conndb.execute("ALTER TABLE akcje ADD COLUMN IF NOT EXISTS A_id INTEGER;")
+    conndb.execute("ALTER TABLE akcje ADD COLUMN IF NOT EXISTS A_noe INTEGER;")
+    conndb.execute("ALTER TABLE spoiwaLancuchow ADD COLUMN IF NOT EXISTS C_ec INTEGER;")
+    conndb.execute("ALTER TABLE akcje ADD COLUMN IF NOT EXISTS Chain_ec INTEGER;")
 
     log.info('Server local time: '+datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f'))
     startTime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
@@ -1618,9 +1770,9 @@ if __name__ == '__main__':
                 return DS.tempC_byDeviceName(row[0])
             elif row[4] == 'dht':
                 if row[8] == 'temperature':
-                    return Adafruit_DHT.read_retry(int(row[6]), int(row[7]))[1]
+                    return round(float(Adafruit_DHT.read_retry(int(row[6]), int(row[7]))[1]),2)
                 elif row[8] == 'humidity':
-                    return Adafruit_DHT.read_retry(int(row[6]), int(row[7]))[0]
+                    return round(float(Adafruit_DHT.read_retry(int(row[6]), int(row[7]))[0]),2)
             elif row[4] == 'tsl2561':
                 return TSL.calculate_lux()
             elif row[4] == 'rotary_encoder':

@@ -1,3 +1,9 @@
+3.2
+- global variables added (usable in chains sequences and automation)
+- new actions for automation and new bonds for chains sequences:
+	- setting number of execution of other action
+	- setting execution counter of other chain sequence
+- bug fixes
 3.1
 - gpio inputs fixed and reworked:
 	- two methods avalible for state change detection (loop monitoring and edge detection)
