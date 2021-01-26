@@ -65,7 +65,7 @@ PASSWORD = ''
 MODE = parser.get('main','mode')
 ENC_KEY = ''
 CODE_VERSION = 7
-TAG_VERSION = 3.2
+TAG_VERSION = 3.3
 startTime = None
 DS = None
 TSL = None
@@ -960,6 +960,7 @@ def requestMethod(data):
             conndb.execute("DELETE from wyzwalaczeAkcji where Id_a=%s", (datalist[2],))
             conndb.execute("UPDATE akcje set Edit_time=%s where Id in (SELECT Id FROM akcje LIMIT 1)", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),))
             conndb.execute("DELETE FROM spoiwaLancuchow WHERE A_id=%s", (datalist[2],))
+            conndb.execute("DELETE from akcje where A_id=%s", (datalist[2],))
             if conndb.rowcount > 0:
                 conndb.execute("UPDATE lancuchy set Edit_time=%s where Id in (SELECT Id FROM lancuchy LIMIT 1)", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),))
             reply = 'true;GPIO_ASA_Delete;'

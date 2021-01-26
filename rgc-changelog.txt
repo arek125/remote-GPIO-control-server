@@ -1,3 +1,5 @@
+3.3
+- bug fixes
 3.2
 - global variables added (usable in chains sequences and automation)
 - new actions for automation and new bonds for chains sequences:
