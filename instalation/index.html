@@ -8,20 +8,26 @@
     
     <meta name="author" content="Arek Goleń">
     
-    <link rel="../img/favicon.ico">
+    <link rel="shortcut icon" href="../img/favicon.ico">
 
     
     <title>Installation - Remote GPIO control</title>
     
 
-    <link rel="stylesheet" href="//use.fontawesome.com/releases/v5.5.0/css/all.css" integrity="sha384-B4dIYHKNBt8Bc12p+WXckhzcICo0wtJAoU8YZTY5qE0Id1GSseTk6S+L3BlXeVIU" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
     <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
-    <link href='//fonts.googleapis.com/css?family=PT+Sans:400,400italic,700,700italic&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
     <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
     <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
     <link href="../css/base.min.css" rel="stylesheet">
     <link href="../css/cinder.min.css" rel="stylesheet">
-    <link href="../css/highlight.min.css" rel="stylesheet">
+
+    
+        
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/github.min.css">
+        
+    
     <link href="../css/extra.css" rel="stylesheet">
 
     <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
@@ -29,15 +35,6 @@
             <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
             <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
         <![endif]-->
-
-    <script src="//ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>
-    <script>
-    WebFont.load({
-        google: {
-            families: ['Open Sans', 'PT Sans']
-        }
-    });
-    </script>
 
     
 
@@ -62,7 +59,9 @@
 
             <!-- Main title -->
 
-            <a class="navbar-brand" href="..">Remote GPIO control</a>
+            
+              <a class="navbar-brand" href="..">Remote GPIO control</a>
+            
         </div>
 
         <!-- Expanded navigation -->
@@ -113,13 +112,13 @@
                         
                             
 <li >
-    <a href="../Rotary encoder/">Rotary encoder KY040</a>
+    <a href="../Rotary%20encoder/">Rotary encoder KY040</a>
 </li>
 
                         
                             
 <li >
-    <a href="../Range sensor/">Range sensor HC-SR04</a>
+    <a href="../Range%20sensor/">Range sensor HC-SR04</a>
 </li>
 
                         
@@ -205,63 +204,55 @@
 
 <h1 id="installation">Installation</h1>
 <h2 id="download-and-unpack-last-release">Download and unpack last release</h2>
-<pre><code class="bash">wget -O rgc-install.tar.gz https://github.com/arek125/remote-GPIO-control-server/releases/latest/download/rgc-install.tar.gz
+<pre><code class="language-bash">wget -O rgc-install.tar.gz https://github.com/arek125/remote-GPIO-control-server/releases/latest/download/rgc-install.tar.gz
 tar -zxvf rgc-install.tar.gz
 cd rgc
 </code></pre>
-
 <h2 id="install-necessary-packages">Install necessary packages</h2>
-<pre><code class="bash">sudo apt-get update
+<pre><code class="language-bash">sudo apt-get update
 sudo apt-get install python-dev python-crypto python-systemd python-pip postgresql libpq-dev postgresql-client 
 sudo pip install psycopg2 psutil
 </code></pre>
-
 <p>In case of:</p>
-<pre><code class="bash">E: Unable to locate package python-systemd
+<pre><code class="language-bash">E: Unable to locate package python-systemd
 </code></pre>
-
 <p>Add backports repository:</p>
-<pre><code class="bash">sudo nano /etc/apt/sources.list
+<pre><code class="language-bash">sudo nano /etc/apt/sources.list
 Paste line:
 For stretch: deb http://archive.debian.org/debian stretch-backports main
 For jessie: deb http://archive.debian.org/debian jessie-backports main
 sudo apt-get update
 </code></pre>
-
 <h2 id="create-postgresql-user-and-database">Create postgresql user and database</h2>
-<pre><code class="bash">sudo su postgres
+<pre><code class="language-bash">sudo su postgres
 createuser pi -P --interactive # set super user to yes
 psql
 CREATE DATABASE db_rgc;
 #Ctrl+D 
 #Ctrl+D 
 </code></pre>
-
 <h2 id="create-systemd-service">Create systemd service</h2>
-<pre><code class="bash">sudo chmod 644 rgc-setup.sh
+<pre><code class="language-bash">sudo chmod 644 rgc-setup.sh
 sudo bash rgc-setup.sh
 </code></pre>
-
 <h2 id="configure-server-config">Configure server config</h2>
-<pre><code class="bash">sudo nano rgc-config.ini # configure sql connection there and any other parameters as neded
+<pre><code class="language-bash">sudo nano rgc-config.ini # configure sql connection there and any other parameters as neded
 </code></pre>
-
 <p><a href="../serverConfig/">More about server config</a></p>
 <p>Keep time on server and client synchronized (diffrent timezones are supported).</p>
 <h2 id="server-control">Server control</h2>
 <p>Use commands to control server app:</p>
-<pre><code class="bash">sudo systemctl start rgc.service
+<pre><code class="language-bash">sudo systemctl start rgc.service
 sudo systemctl stop rgc.service
 sudo systemctl restart rgc.service
 sudo systemctl status rgc.service
 journalctl -u rgc.service # to see logs in case of problems (avalible form client too)
 </code></pre>
-
 <h2 id="server-access">Server access</h2>
-<p>To access web app go to http://deviceIpOrHost:port (eg. http://192.168.1.4:9999)
+<p>To access web app go to http://deviceIpOrHost:port (eg. http://192.168.1.4:80)
 To access from android app, install apk file and configure connection.</p>
 <h2 id="update">Update</h2>
-<pre><code class="bash">cd /home/pi # or go to rgc main folder destination
+<pre><code class="language-bash">cd /home/pi # or go to rgc main folder destination
 wget -O rgc-update.tar.gz https://github.com/arek125/remote-GPIO-control-server/releases/latest/download/rgc-update.tar.gz
 tar -zxvf rgc-update.tar.gz
 sudo systemctl restart rgc.service
@@ -270,19 +261,29 @@ sudo systemctl restart rgc.service
         
     </div>
 
-    <footer class="col-md-12 text-center">
-        
-        <hr>
-        <p>
-        <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</p></small>
+    
+      <footer class="col-md-12 text-center">
+          
+          
+            <hr>
+            <p>
+            <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+            </p>
+          
 
-        
-        
-    </footer>
+          
+          
+      </footer>
+    
     <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
     <script src="../js/bootstrap-3.0.3.min.js"></script>
-    <script src="../js/highlight.pack.js"></script>
+
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+        
     <script>hljs.initHighlightingOnLoad();</script>
+    
+
     <script>var base_url = ".."</script>
     
     <script src="../js/base.js"></script>
@@ -292,8 +293,11 @@ sudo systemctl restart rgc.service
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
                 <h4 class="modal-title" id="searchModalLabel">Search</h4>
-                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
             </div>
             <div class="modal-body">
                 <p>

@@ -8,20 +8,26 @@
     
     <meta name="author" content="Arek Goleń">
     
-    <link rel="../img/favicon.ico">
+    <link rel="shortcut icon" href="../img/favicon.ico">
 
     
     <title>Config - Remote GPIO control</title>
     
 
-    <link rel="stylesheet" href="//use.fontawesome.com/releases/v5.5.0/css/all.css" integrity="sha384-B4dIYHKNBt8Bc12p+WXckhzcICo0wtJAoU8YZTY5qE0Id1GSseTk6S+L3BlXeVIU" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
     <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
-    <link href='//fonts.googleapis.com/css?family=PT+Sans:400,400italic,700,700italic&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
     <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
     <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
     <link href="../css/base.min.css" rel="stylesheet">
     <link href="../css/cinder.min.css" rel="stylesheet">
-    <link href="../css/highlight.min.css" rel="stylesheet">
+
+    
+        
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/github.min.css">
+        
+    
     <link href="../css/extra.css" rel="stylesheet">
 
     <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
@@ -29,15 +35,6 @@
             <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
             <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
         <![endif]-->
-
-    <script src="//ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>
-    <script>
-    WebFont.load({
-        google: {
-            families: ['Open Sans', 'PT Sans']
-        }
-    });
-    </script>
 
     
 
@@ -62,7 +59,9 @@
 
             <!-- Main title -->
 
-            <a class="navbar-brand" href="..">Remote GPIO control</a>
+            
+              <a class="navbar-brand" href="..">Remote GPIO control</a>
+            
         </div>
 
         <!-- Expanded navigation -->
@@ -113,13 +112,13 @@
                         
                             
 <li >
-    <a href="../Rotary encoder/">Rotary encoder KY040</a>
+    <a href="../Rotary%20encoder/">Rotary encoder KY040</a>
 </li>
 
                         
                             
 <li >
-    <a href="../Range sensor/">Range sensor HC-SR04</a>
+    <a href="../Range%20sensor/">Range sensor HC-SR04</a>
 </li>
 
                         
@@ -197,25 +196,22 @@
 
 <h1 id="server-config-overview">Server config overview</h1>
 <p>Server config can be edited directly from file:</p>
-<pre><code class="bash">sudo nano rgc-config.ini
+<pre><code class="language-bash">sudo nano rgc-config.ini
 </code></pre>
-
 <p>Or from web client: Home (config button)</p>
 <p>Every time when config is changed server restart is required (web client will ask for it):</p>
-<pre><code class="bash">sudo systemctl restart rgc.service
+<pre><code class="language-bash">sudo systemctl restart rgc.service
 </code></pre>
-
 <h2 id="postgresql-config">Postgresql config</h2>
-<pre><code class="ini">[postgresql]
+<pre><code class="language-ini">[postgresql]
 host = localhost
 user = root
 password = SECRET
 db = db_rgc
 </code></pre>
-
 <p>Is necessary to set it before first start. </p>
 <h2 id="main-config">Main config</h2>
-<pre><code class="ini">[main]
+<pre><code class="language-ini">[main]
 mode = all
 mobilePort = 8888
 wwwPort = 80
@@ -223,13 +219,12 @@ debug = no
 passwordEnabled = no
 password = SECRET
 </code></pre>
-
 <p>By setting <code>mode = all</code> both server (mobile and web) are runnig, limit it to one by setting <code>mode = wwwOnly</code> or <code>mode = mobileOnly</code>.<br />
 <code>mobilePort</code> for android connection (UDP and TCP)<br />
 <code>wwwPort</code> for http connection<br />
 By setting <code>passwordEnabled = yes</code> encritpion is enabled and access is protected with setted <code>password</code>  </p>
 <h2 id="sensors-config">Sensors config</h2>
-<pre><code class="ini">[sensors]
+<pre><code class="language-ini">[sensors]
 ds18b20 = no
 dht = no
 dhtType = 11
@@ -246,7 +241,6 @@ rangeSensorTrigger = -1
 rangeSensorEcho = -1
 rangeSensorMaxValue = 340
 </code></pre>
-
 <p><code>ds18b20</code> all conected to 1wire <code>yes</code> or <code>no</code><br />
 <code>dhtType</code> 11 or 22 or AM2302 (comma separated for more)<br />
 <code>dhtGpio</code> GPIO BCM PIN number (comma separated for more)<br />
@@ -259,32 +253,41 @@ rangeSensorMaxValue = 340
 <code>rangeSensorEcho</code> GPIO BCM PIN number<br />
 <code>rangeSensorMaxValue</code> value in cm  </p>
 <h2 id="radio-frequency">Radio frequency</h2>
-<pre><code class="ini">[rf]
+<pre><code class="language-ini">[rf]
 reciver = no
 reciverGpio = -1
 transmiter = no
 transmiterGpio = -1
 </code></pre>
-
 <p><code>reciverGpio</code> GPIO BCM PIN number<br />
 <code>transmiterGpio</code> GPIO BCM PIN number  </p></div>
         
         
     </div>
 
-    <footer class="col-md-12 text-center">
-        
-        <hr>
-        <p>
-        <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</p></small>
+    
+      <footer class="col-md-12 text-center">
+          
+          
+            <hr>
+            <p>
+            <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+            </p>
+          
 
-        
-        
-    </footer>
+          
+          
+      </footer>
+    
     <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
     <script src="../js/bootstrap-3.0.3.min.js"></script>
-    <script src="../js/highlight.pack.js"></script>
+
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+        
     <script>hljs.initHighlightingOnLoad();</script>
+    
+
     <script>var base_url = ".."</script>
     
     <script src="../js/base.js"></script>
@@ -294,8 +297,11 @@ transmiterGpio = -1
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
                 <h4 class="modal-title" id="searchModalLabel">Search</h4>
-                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
             </div>
             <div class="modal-body">
                 <p>

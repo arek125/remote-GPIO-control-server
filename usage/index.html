@@ -8,20 +8,26 @@
     
     <meta name="author" content="Arek Goleń">
     
-    <link rel="../img/favicon.ico">
+    <link rel="shortcut icon" href="../img/favicon.ico">
 
     
     <title>Usage - Remote GPIO control</title>
     
 
-    <link rel="stylesheet" href="//use.fontawesome.com/releases/v5.5.0/css/all.css" integrity="sha384-B4dIYHKNBt8Bc12p+WXckhzcICo0wtJAoU8YZTY5qE0Id1GSseTk6S+L3BlXeVIU" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
     <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
-    <link href='//fonts.googleapis.com/css?family=PT+Sans:400,400italic,700,700italic&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
     <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
     <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
     <link href="../css/base.min.css" rel="stylesheet">
     <link href="../css/cinder.min.css" rel="stylesheet">
-    <link href="../css/highlight.min.css" rel="stylesheet">
+
+    
+        
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/github.min.css">
+        
+    
     <link href="../css/extra.css" rel="stylesheet">
 
     <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
@@ -29,15 +35,6 @@
             <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
             <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
         <![endif]-->
-
-    <script src="//ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>
-    <script>
-    WebFont.load({
-        google: {
-            families: ['Open Sans', 'PT Sans']
-        }
-    });
-    </script>
 
     
 
@@ -62,7 +59,9 @@
 
             <!-- Main title -->
 
-            <a class="navbar-brand" href="..">Remote GPIO control</a>
+            
+              <a class="navbar-brand" href="..">Remote GPIO control</a>
+            
         </div>
 
         <!-- Expanded navigation -->
@@ -113,13 +112,13 @@
                         
                             
 <li >
-    <a href="../Rotary encoder/">Rotary encoder KY040</a>
+    <a href="../Rotary%20encoder/">Rotary encoder KY040</a>
 </li>
 
                         
                             
 <li >
-    <a href="../Range sensor/">Range sensor HC-SR04</a>
+    <a href="../Range%20sensor/">Range sensor HC-SR04</a>
 </li>
 
                         
@@ -198,6 +197,8 @@
                 <li class="third-level"><a href="#sniffer">Sniffer</a></li>
             <li class="second-level"><a href="#linked-pis">Linked PI's</a></li>
                 
+            <li class="second-level"><a href="#global-variables">Global variables</a></li>
+                
             <li class="second-level"><a href="#chain-sequences">Chain sequences</a></li>
                 
                 <li class="third-level"><a href="#bonds">Bonds</a></li>
@@ -207,6 +208,7 @@
                 <li class="third-level"><a href="#triggers">Triggers</a></li>
                 <li class="third-level"><a href="#conjunction-pattern">Conjunction pattern</a></li>
                 <li class="third-level"><a href="#example-1-alarm-when-smoke-detected">Example 1 - Alarm when smoke detected</a></li>
+                <li class="third-level"><a href="#example-2-activatedeactivate-ralay-based-on-temperature-sensor-value">Example 2 - Activate/Deactivate ralay based on temperature sensor value</a></li>
         <li class="first-level "><a href="#android-client">Android Client</a></li>
             <li class="second-level"><a href="#connection">Connection</a></li>
                 
@@ -224,8 +226,9 @@
 <p><img alt="" src="../img/outputspreview.gif" />
 Example with led and buzzer connected.</p>
 <p>Control GPIO outputs by setting state at LOW or HIGH.</p>
-<p>Multiple pins can be used as one tile.
-<details><summary>BCM Pinout</summary><img alt="" src="../img/header_pinout.jpg" /></details></p>
+<p>Multiple pins can be used as one tile.</p>
+<details><summary>BCM Pinout</summary>![](img/header_pinout.jpg)</details>
+
 <p>With reverse checkbox, colors of button can be reversed for LOW/HIGH state.</p>
 <p>Tiles can be defined to act like:</p>
 <ul>
@@ -237,23 +240,24 @@ Example with led and buzzer connected.</p>
 Example with hardware pushbutton:
 <img alt="" src="../img/pushbutton.jpg" /></p>
 <p>Read GPIO inputs state by color.</p>
-<p>Single pin can be used for one tile.
-<details><summary>BCM Pinout</summary><img alt="" src="../img/header_pinout.jpg" /></details></p>
+<p>Single pin can be used for one tile.</p>
+<details><summary>BCM Pinout</summary>![](img/header_pinout.jpg)</details>
+
 <p>With reverse checkbox, colors of button can be reversed for LOW/HIGH state.</p>
 <h2 id="software-pwm-outputs">Software PWM Outputs</h2>
 <p><img alt="" src="../img/pwmspreview.gif" />
 Example with servo connected.</p>
 <p>Control Software PWM Outputs by turning PWM on or off, when turned on control frequency and duty cycle.</p>
-<p>Multiple pins can be used as one tile.
-<details><summary>BCM Pinout</summary><img alt="" src="../img/header_pinout.jpg" /></details></p>
+<p>Multiple pins can be used as one tile.</p>
+<details><summary>BCM Pinout</summary>![](img/header_pinout.jpg)</details>
+
 <p>With reverse checkbox, duty cycle slider can be placed up side down.</p>
 <h2 id="custom-shell-commands">Custom shell commands</h2>
 <p><img alt="" src="../img/cmdspreview.gif" />
 Example with python file:</p>
-<pre><code class="python">import random
+<pre><code class="language-python">import random
 print random.randint(1,101)
 </code></pre>
-
 <p>Execute custom shell commands, this can be bash command or execution of script file in any language.
 Result will be saved according to what script/command print/return.</p>
 <p>With wait checkbox checked client will wait (in the same thread as execution) for result and print it, otherwise seperate thread will be created.</p>
@@ -289,8 +293,10 @@ Example with DHT11, range and custom sensor.</p>
 <h2 id="linked-pis">Linked PI's</h2>
 <p>Link multiple pi devices (with rgc setup), this can be used for chains execution a cross them, or automation.</p>
 <p>Both connections type (www or mobile) are supported.</p>
+<h2 id="global-variables">Global variables</h2>
+<p>They can be used to create some more advanced automations or chain sequences. Four types are available: String (any text), Number, Date and time.</p>
 <h2 id="chain-sequences">Chain sequences</h2>
-<p>Runs multiple actions(bonds) one by one with one click. Built sequence can be runned multiple times afer execution (Loop countdown), if value there is -1 then sequence will be repeted until cancelation. </p>
+<p>Runs multiple actions(bonds) one by one with one click. Built sequence can be runned multiple times afer execution (Execution countdown), if value there is -1 then sequence will be repeted until cancelation. </p>
 <p>With &lt;&gt; icon execution order of bonds can be changed.</p>
 <h3 id="bonds">Bonds</h3>
 <p>To use specific bond type, source must be first configured in separate tab or in linked device.</p>
@@ -302,6 +308,9 @@ Example with DHT11, range and custom sensor.</p>
 <li>Transmit Radio Frequency code </li>
 <li>Execude custom command</li>
 <li>Execude or cancel other chain</li>
+<li>Set global variable</li>
+<li>Set number of executions of automated action</li>
+<li>Set chain execution countdown</li>
 </ul>
 <p>Each execution can be daleyed with specific time (seconds)</p>
 <p>All actions can be runned on selected linked device, device must be online and rgc app active in time of configurtion and chain execution.</p>
@@ -318,6 +327,9 @@ Example with DHT11, range and custom sensor.</p>
 <li>Transmit Radio Frequency code </li>
 <li>Execude custom command</li>
 <li>Execude or cancel other chain</li>
+<li>Set global variable</li>
+<li>Set number of executions of automated action</li>
+<li>Set chain execution countdown</li>
 </ul>
 <p>Number of executions can be limited by any number, -1 - unlimited.</p>
 <p>Checkbox keep logs - if checked executed action will be saved in history log.</p>
@@ -339,9 +351,11 @@ Example with DHT11, range and custom sensor.</p>
 <li>Ping</li>
 <li>Recive RF</li>
 <li>Custom command output</li>
+<li>Global variable value</li>
 <li>Linked Input/Output state</li>
 <li>Linked Sensor value</li>
 <li>Linked Recive RF</li>
+<li>Linked global variable value</li>
 </ul>
 <p>Most triggers types have configurable operator, example of use can be sensor value to trigger action when selected sensor value is bigger then 20 (eg. Sensor value &gt; 20).</p>
 <h3 id="conjunction-pattern">Conjunction pattern</h3>
@@ -353,6 +367,13 @@ Example with DHT11, range and custom sensor.</p>
 <p><img alt="" src="../img/automationpreview.gif" /></p>
 <p>Alarm (early configured chain of blinking led and buzzer) will go on when smoke sensor (confugired on second linked pi device) change state. </p>
 <p>Action is also limited to run only beetwen 2:00 and 9:00 o'clock.</p>
+<h3 id="example-2-activatedeactivate-ralay-based-on-temperature-sensor-value">Example 2 - Activate/Deactivate ralay based on temperature sensor value</h3>
+<p>Scenario: We want to activate relay once, for 20 seconds when temerature sensor value is above 25C. Repeat this action if temperature goes down below 22C and back to above 25C.</p>
+<p><img alt="" src="../img/automationpreview2.gif" /></p>
+<p>In addition of sensor and ralay output configuration we need to have variable flag to control automation.</p>
+<p>Created chain suqence sets relay ON for 20 second and sets variable flag.</p>
+<p>First automated action check if temperature is above 25C and variable flag is set and then runs created chain suqence.</p>
+<p>Second automated action check if temperature is below 22C and then sets variable flag.</p>
 <h1 id="android-client">Android Client</h1>
 <h2 id="connection">Connection</h2>
 <p>To connect to the server, connection must be first configured.</p>
@@ -380,19 +401,29 @@ Example with DHT11, range and custom sensor.</p>
         
     </div>
 
-    <footer class="col-md-12 text-center">
-        
-        <hr>
-        <p>
-        <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</p></small>
+    
+      <footer class="col-md-12 text-center">
+          
+          
+            <hr>
+            <p>
+            <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+            </p>
+          
 
-        
-        
-    </footer>
+          
+          
+      </footer>
+    
     <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
     <script src="../js/bootstrap-3.0.3.min.js"></script>
-    <script src="../js/highlight.pack.js"></script>
+
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+        
     <script>hljs.initHighlightingOnLoad();</script>
+    
+
     <script>var base_url = ".."</script>
     
     <script src="../js/base.js"></script>
@@ -402,8 +433,11 @@ Example with DHT11, range and custom sensor.</p>
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
                 <h4 class="modal-title" id="searchModalLabel">Search</h4>
-                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
             </div>
             <div class="modal-body">
                 <p>
