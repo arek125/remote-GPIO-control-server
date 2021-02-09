@@ -64,8 +64,8 @@ parser.read('rgc-config.ini')
 PASSWORD = ''
 MODE = parser.get('main','mode')
 ENC_KEY = ''
-CODE_VERSION = 7
-TAG_VERSION = 3.3
+CODE_VERSION = 8
+TAG_VERSION = 3.4
 startTime = None
 DS = None
 TSL = None
@@ -81,6 +81,7 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 exit_event = multiprocessing.Event()
 doRestartAfterReply = -1
+pms7003 = None
 
 running_proceses = []
 mesured_proceses = {}
@@ -137,22 +138,27 @@ def action(id,idCE = 0,changedBy="scheduled"):
             if row is None: sys.exit()
             conndb4.execute("SELECT * FROM wyzwalaczeAkcji w left join sensory s on w.Id_s = s.Id left join stany st on w.Id_s = CAST(st.Id AS TEXT) left join pwm p on w.Id_s = CAST(p.Id AS TEXT) left join rf r on w.Id_s=CAST(r.Id AS TEXT) left join globalVariables v on w.Id_s=CAST(v.Id AS TEXT) WHERE w.Id_a = %s ORDER BY w.Lp",(row[0],))
             conditions = []
+            conditionsLog = []
             conditionString = ''
+            conditionStringLog = ''
             triggers = []
             for rowW in conndb4.fetchall():
                 triggers.append(rowW[4])
                 if rowW[4] == 'date':
                     conditions.append(eval("strptime('"+rowW[6]+"','%Y-%m-%d %H:%M')"+rowW[5]+"datetime.utcnow().replace(microsecond=0,second=0)"))
+                    conditionsLog.append(rowW[4]+":"+rowW[6]+rowW[5]+datetime.utcnow().replace(microsecond=0,second=0).strftime('%Y-%m-%d %H:%M'))
                 elif rowW[4] == 'hour':
                     triggerHour = datetime.strptime(rowW[6],'%H:%M')
                     currentHour = datetime.utcnow().replace(1900,1,1,microsecond=0,second=0)
                     conditions.append(eval('triggerHour'+rowW[5]+'currentHour'))
+                    conditionsLog.append(rowW[4]+":"+triggerHour.strftime('%H:%M')+rowW[5]+currentHour.strftime('%H:%M'))
                 elif rowW[4] == 'timer':
                     timelist = rowW[6].split(",")
                     if rowW[0] not in trigger_timer or trigger_timer[rowW[0]][0] != int(timelist[0])*1000:
                         trigger_timer[rowW[0]] = (int(timelist[0])*1000,int(timelist[1])*1000,int(round(time.time()*1000)))
                     timeS = trigger_timer[rowW[0]][1] - (int(round(time.time()*1000)) - trigger_timer[rowW[0]][2])
                     conditions.append(timeS <= 0)
+                    conditionsLog.append(rowW[4]+":"+str(timeS) +'<=0')
                     if timeS > 0:
                         trigger_timer[rowW[0]] =(trigger_timer[rowW[0]][0],timeS,int(round(time.time()*1000)))
                         if updateCD <= 0:
@@ -161,33 +167,46 @@ def action(id,idCE = 0,changedBy="scheduled"):
                         trigger_timer[rowW[0]] = (trigger_timer[rowW[0]][0],trigger_timer[rowW[0]][0],int(round(time.time()*1000)))
                 elif rowW[4] == 'sensor':
                     sensorValue = getCurrentSensorValue(rowW[2],conndb4)
-                    conditions.append(eval(str(sensorValue)+rowW[5]+rowW[6]))
+                    if sensorValue != None: 
+                        conditions.append(eval(str(sensorValue)+rowW[5]+rowW[6]))
+                        conditionsLog.append(rowW[4]+":"+str(sensorValue)+rowW[5]+rowW[6])
+                    else: conditions.append(False)
                 elif rowW[4] == 'weekday':
                     conditions.append(eval("datetime.now().weekday()"+rowW[5]+rowW[6]))
+                    conditionsLog.append(rowW[4]+":"+str(datetime.now().weekday())+rowW[5]+rowW[6])
                 elif rowW[4] == 'i/o':
                     planned = int(rowW[6])
                     cState = int(rowW[21])
                     reverse = int(rowW[25])
                     conditions.append(True if ((planned==cState and not reverse) or (planned==2 and planned==cState) or (planned!=cState and reverse and planned!=2)) else False)
+                    conditionsLog.append("State equals" if ((planned==cState and not reverse) or (planned==2 and planned==cState) or (planned!=cState and reverse and planned!=2)) else "State not equals")
                 elif rowW[4] == 'pwm state':
                     conditions.append(int(rowW[6]) == int(rowW[32]))
+                    conditionsLog.append("State equals" if (int(rowW[6]) == int(rowW[32])) else "State not equals")
                 elif rowW[4] == 'pwm fr':
                     conditions.append(eval(str(rowW[30])+rowW[5]+rowW[6]) and int(rowW[32] == 1))
+                    conditionsLog.append(rowW[4]+":"+str(rowW[30])+"Hz"+rowW[5]+rowW[6]+"Hz")
                 elif rowW[4] == 'pwm dc':
                     conditions.append(eval(str(rowW[31])+rowW[5]+rowW[6]) and int(rowW[32] == 1))
+                    conditionsLog.append(rowW[4]+":"+str(rowW[31])+"%"+rowW[5]+rowW[6]+"%")
                 elif rowW[4] == 'in chain':
                     conditions.append(eval(rowW[6]+rowW[5]+str(idCE != 0)))
+                    conditionsLog.append('In chain run')
                 elif rowW[4] == 'ping':
                     response = os.system("ping -c 1 -w 2 -t 2 "+rowW[2]+" > /dev/null 2>&1")
                     if response == 0: isPinging = True
                     else: isPinging = False
                     conditions.append(eval(rowW[6]+rowW[5]+str(isPinging)))
+                    conditionsLog.append(rowW[2]+rowW[6]+rowW[5]+'Pinging:'+str(isPinging))
                 elif rowW[4] == 'rfrecived':
                     conndb4.execute("select h.Id from rfHistoria h left join rf r on h.Id = r.Id where Type LIKE 'Recive' and Timestamp >= %s and h.Id = %s",(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),rowW[2]))
                     conditions.append(eval(rowW[6]+rowW[5]+str(bool(conndb4.rowcount))))
+                    conditionsLog.append(rowW[4]+":"+rowW[6]+rowW[5]+str(bool(conndb4.rowcount)))
                 elif rowW[4] == 'cmd':
                     execCmd = execCustomCmd(conndb4,rowW[2],changedBy,False,True)
-                    if execCmd[0]: conditions.append(eval(str(execCmd[1]).rstrip()+rowW[5]+rowW[6]))
+                    if execCmd[0]: 
+                        conditions.append(eval(str(execCmd[1]).rstrip()+rowW[5]+rowW[6]))
+                        conditionsLog.append(rowW[4]+":"+str(execCmd[1]).rstrip()+rowW[5]+rowW[6])
                     else: conditions.append(False)
                 elif rowW[4] == 'var':
                     if rowW[47] == "String": conditions.append(eval("'"+str(rowW[46])+"'"+rowW[5]+"'"+str(rowW[6])+"'"))
@@ -197,6 +216,7 @@ def action(id,idCE = 0,changedBy="scheduled"):
                         varHour = datetime.strptime(rowW[46],'%H:%M')
                         conditions.append(eval('varHour'+rowW[5]+'triggerHour'))
                     else: conditions.append(eval(str(rowW[46])+rowW[5]+rowW[6]))
+                    conditionsLog.append(rowW[4]+":"+str(rowW[46])+rowW[5]+rowW[6])
                 elif rowW[4] == 'i/o link':
                     res = callLinkedPi(rowW[7],'Get_GPIO;'+rowW[2],conndb4)
                     # print res
@@ -205,16 +225,19 @@ def action(id,idCE = 0,changedBy="scheduled"):
                         cState = int(res[4])
                         reverse = int(res[8])
                         conditions.append(True if ((planned==cState and not reverse) or (planned==2 and planned==cState) or (planned!=cState and reverse and planned!=2)) else False)
+                        conditionsLog.append(rowW[4]+":"+"State equals" if ((planned==cState and not reverse) or (planned==2 and planned==cState) or (planned!=cState and reverse and planned!=2)) else "State not equals")
                     else: conditions.append(False)
                 elif rowW[4] == 'sensor link':
                     res = callLinkedPi(rowW[7],'SENSOR_value;'+rowW[2],conndb4,1)
                     if res:
                         conditions.append(eval(res[2]+rowW[5]+rowW[6]))
+                        conditionsLog.append(rowW[4]+":"+res[2]+rowW[5]+rowW[6])
                     else: conditions.append(False)
                 elif rowW[4] == 'rfrecived link':
                     res = callLinkedPi(rowW[7],'GetRfRecivedNow;'+rowW[2],conndb4,1)
                     if res:
                         conditions.append(eval(rowW[6]+rowW[5]+str(bool(int(res[2])))))
+                        conditionsLog.append(rowW[4]+":"+rowW[6]+rowW[5]+str(bool(int(res[2]))))
                     else: conditions.append(False)
                 elif rowW[4] == 'var link':
                     res = callLinkedPi(rowW[7],'GetGlobalVar;'+rowW[2],conndb4,1)
@@ -226,6 +249,7 @@ def action(id,idCE = 0,changedBy="scheduled"):
                             varHour = datetime.strptime(res[2],'%H:%M')
                             conditions.append(eval('varHour'+rowW[5]+'triggerHour'))
                         else: conditions.append(eval(res[2]+rowW[5]+rowW[6]))
+                        conditionsLog.append(rowW[4]+":"+str(rowW[46])+rowW[5]+rowW[6])
                     else: conditions.append(False)
             # print str(id)+str(conditions)
             if len(conditions) > 0:
@@ -237,11 +261,23 @@ def action(id,idCE = 0,changedBy="scheduled"):
                         else:
                             conditionString+=str(cond)+" and "
                         i+=1
+                    i=1
+                    for cond in conditionsLog:
+                        if len(conditionsLog)==i:
+                            conditionStringLog+=str(cond)
+                        else:
+                            conditionStringLog+=str(cond)+" and "
+                        i+=1
                 else:
                     i=1
                     conditionString = row[3]
                     for cond in conditions:
                         conditionString = re.sub('#'+str(i)+'#', str(cond), conditionString)
+                        i+=1
+                    i=1
+                    conditionStringLog = row[3]
+                    for cond in conditionsLog:
+                        conditionStringLog = re.sub('#'+str(i)+'#', str(cond), conditionStringLog)
                         i+=1
                 conjunctionValid = True
                 try:
@@ -264,7 +300,8 @@ def action(id,idCE = 0,changedBy="scheduled"):
                         elif (row[1] == 'pwm' and not isThereTimeTrigger) or (row[1] == 'pwm' and isThereTimeTrigger and lastExecTime != currentTime):
                             execuded = pwmChange(row[9],row[8],row[7],row[6],conndb4,changedBy,True if row[13] else False)
                         elif (row[1] == 'chain' and not isThereTimeTrigger) or (row[1] == 'chain' and isThereTimeTrigger and lastExecTime != currentTime):
-                            if int(row[5]): threading.Thread(target=chainExecude, args=(row[12], changedBy, True if row[13] else False)).start()
+                            #if int(row[5]): threading.Thread(target=chainExecude, args=(row[12], changedBy, True if row[13] else False)).start()
+                            if int(row[5]): chainExecude(row[12],changedBy, True if row[13] else False)
                             else: conndb4.execute("UPDATE lancuchy set Status=0 WHERE Id=%s",(row[12],))
                             execuded = True
                         elif (row[1] == 'rfsend' and not isThereTimeTrigger) or (row[1] == 'rfsend' and isThereTimeTrigger and lastExecTime != currentTime):
@@ -286,6 +323,7 @@ def action(id,idCE = 0,changedBy="scheduled"):
                             conndb4.execute("UPDATE akcje set Rodzaj=%s,Edit_time=%s where Id = %s", (str(noe-1),datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),row[0]))
                         elif execuded:
                             conndb4.execute("UPDATE akcje set Edit_time=%s where Id = %s", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),row[0]))
+                        if execuded and row[13]: conndb4.execute("INSERT INTO historia(Typ, Id_a, Stan) VALUES(%s,%s,%s)", (conditionStringLog, str(row[0]), row[1]))
                         # conndb4.commit()
                 elif noe <= 0: break
             if row[15] is not None: sleepTime = float(row[15])
@@ -296,6 +334,7 @@ def action(id,idCE = 0,changedBy="scheduled"):
             startTime = time.time()
             time.sleep(sleepTime)
         except Exception as e:
+            print e.message
             log.error(e.message)
             log.error(traceback.format_exc())
     conndb4.close()
@@ -828,7 +867,7 @@ def requestMethod(data):
                 reply += str(row[0])+";"+str(row[1])+";"+str(row[4])+";"+str(row[10])+";"+str(row[2])+";"+str(row[3])+";"+str(row[5])+";"+str(row[11])+";"+str(row[9])+";"+str(row[7])+";"+str(row[8])+";"
         elif datalist[1] == 'SENSOR_value':
             value = getCurrentSensorValue(datalist[2],conndb)
-            if value == -999: reply = 'false;SENSOR_value;'+str(value)+";"
+            if value == None: reply = 'false;SENSOR_value;'+str(value)+";"
             else: reply = 'true;SENSOR_value;'+str(value)+";"
         elif datalist[1] == 'SENSOR_names':
             reply = 'true;SENSOR_names;'
@@ -869,7 +908,7 @@ def requestMethod(data):
                 else:
                     cursor = conndb.execute("SELECT * from historia h JOIN stany s ON h.Id_IO=s.Id WHERE h.Id_IO = %s AND h.Czas > %s AND h.Stan = %s ORDER BY h.Czas DESC", (datalist[2], datalist[6], datalist[4]))
                 for row in conndb.fetchall():
-                    reply += str(row[11])+';'+str(row[1]) +';'+str(row[2])+';'+str(row[5])+';'
+                    reply += str(row[12])+';'+str(row[1]) +';'+str(row[2])+';'+str(row[5])+';'
             elif datalist[3] == "sensor":
                 updateSensorHistory(datalist[2],conndb)
                 cursor = conndb.execute("SELECT * from sensoryHistoria h JOIN sensory s ON h.Id = s.Id WHERE h.Id = %s AND h.Timestamp > %s AND h.Value "+datalist[5]+" %s ORDER BY h.Timestamp DESC", (datalist[2], datalist[6], datalist[4]))
@@ -961,6 +1000,7 @@ def requestMethod(data):
             conndb.execute("UPDATE akcje set Edit_time=%s where Id in (SELECT Id FROM akcje LIMIT 1)", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),))
             conndb.execute("DELETE FROM spoiwaLancuchow WHERE A_id=%s", (datalist[2],))
             conndb.execute("DELETE from akcje where A_id=%s", (datalist[2],))
+            conndb.execute("DELETE FROM historia WHERE Id_a=%s", (datalist[2],))
             if conndb.rowcount > 0:
                 conndb.execute("UPDATE lancuchy set Edit_time=%s where Id in (SELECT Id FROM lancuchy LIMIT 1)", (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),))
             reply = 'true;GPIO_ASA_Delete;'
@@ -1035,7 +1075,7 @@ def requestMethod(data):
                     datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f'),))
             reply = 'true;GPIO_ChainDelete;'
         elif datalist[1] == 'GPIO_ChainBondDelete':
-            conndb.execute("DELETE FROM spoiwaLancuchow WHERE Id=%s",(datalist[2]))
+            conndb.execute("DELETE FROM spoiwaLancuchow WHERE Id=%s",(datalist[2],))
             cursor = conndb.execute("SELECT Id FROM spoiwaLancuchow WHERE Id_c=%s ORDER BY Lp",(datalist[3],))
             i = 1
             for row in conndb.fetchall():
@@ -1139,21 +1179,8 @@ def requestMethod(data):
             timeConfLines = timeConf.splitlines()
             for line in timeConfLines:
                 reply += line+';'
-        # elif datalist[1] == 'Server_update':
-        #     statusCode = os.system("systemctl status rgc.service")
-        #     if statusCode == 0:
-        #         path = os.getcwd()+"/rgc-server.tar.gz"
-        #         fh = open(path, "wb")
-        #         fh.write(datalist[2].decode('base64'))
-        #         fh.close()
-        #         import tarfile
-        #         tar = tarfile.open(path)
-        #         tar.extractall()
-        #         tar.close()
-        #         conndb.close()
-        #         doRestartAfterReply = 1
         elif datalist[1] == 'HR_sel':
-            cursor = conndb.execute("SELECT h.Id,Czas,Typ,case when s.Name is NOT NULL then s.Name when p.Name is NOT NULL then p.Name when l.Nazwa is NOT NULL then l.Nazwa else c.Name end as NameC,h.Stan FROM historia h Left JOIN stany s ON s.Id = h.Id_IO left JOIN pwm p ON p.Id = h.Id_Pwm left JOIN lancuchy l ON l.Id = h.Id_c left JOIN customCmds c ON c.Id = h.Id_cmd where Czas between %s and %s order by Czas DESC LIMIT %s", (datalist[2], datalist[3],datalist[5]))
+            cursor = conndb.execute("SELECT h.Id,Czas,h.Typ,case when s.Name is NOT NULL then s.Name when p.Name is NOT NULL then p.Name when l.Nazwa is NOT NULL then l.Nazwa when a.Nazwa is NOT NULL then a.Nazwa else c.Name end as NameC,h.Stan FROM historia h Left JOIN stany s ON s.Id = h.Id_IO left JOIN pwm p ON p.Id = h.Id_Pwm left JOIN lancuchy l ON l.Id = h.Id_c left JOIN customCmds c ON c.Id = h.Id_cmd left JOIN akcje a ON a.Id = h.Id_a where Czas between %s and %s order by Czas DESC LIMIT %s", (datalist[2], datalist[3],datalist[5]))
             reply = 'true;HR_sel;'+datalist[4]+";"
             for row in conndb.fetchall():
                 reply += str(row[0])+';'+str(row[1])+';'+str(row[2])+';'+str(row[3])+';'+str(row[4])+';'
@@ -1166,8 +1193,10 @@ def requestMethod(data):
                 cursor = conndb.execute("SELECT h.Id,Czas,Typ,l.Nazwa,h.Stan FROM historia h JOIN lancuchy l ON l.Id = h.Id_c WHERE Czas between %s and %s order by Czas DESC LIMIT 1000", (datalist[2], datalist[3]))
             elif datalist[4] == 'cmd':
                 cursor = conndb.execute("SELECT h.Id,Czas,Typ,c.Name,h.Stan FROM historia h JOIN customCmds c ON c.Id = h.Id_cmd WHERE Czas between %s and %s order by Czas DESC LIMIT 1000", (datalist[2], datalist[3]))
+            elif datalist[4] == 'action':
+                cursor = conndb.execute("SELECT h.Id,Czas,h.Typ,a.Nazwa,h.Stan FROM historia h JOIN akcje a ON a.Id = h.Id_a WHERE Czas between %s and %s order by Czas DESC LIMIT 1000", (datalist[2], datalist[3]))
             elif datalist[4] == 'all':
-                cursor = conndb.execute("SELECT h.Id,Czas,Typ,case when s.Name is NOT NULL then s.Name when p.Name is NOT NULL then p.Name when l.Nazwa is NOT NULL then l.Nazwa else c.Name end as MainName,h.Stan FROM historia h Left JOIN stany s ON s.Id = h.Id_IO left JOIN pwm p ON p.Id = h.Id_Pwm left JOIN lancuchy l ON l.Id = h.Id_c left JOIN customCmds c ON c.Id = h.Id_cmd where Czas between %s and %s order by Czas DESC  LIMIT 1000", (datalist[2], datalist[3]))
+                cursor = conndb.execute("SELECT h.Id,Czas,h.Typ,case when s.Name is NOT NULL then s.Name when p.Name is NOT NULL then p.Name when l.Nazwa is NOT NULL then l.Nazwa when a.Nazwa is NOT NULL then a.Nazwa else c.Name end as MainName,h.Stan FROM historia h Left JOIN stany s ON s.Id = h.Id_IO left JOIN pwm p ON p.Id = h.Id_Pwm left JOIN lancuchy l ON l.Id = h.Id_c left JOIN customCmds c ON c.Id = h.Id_cmd left JOIN akcje a ON a.Id = h.Id_a where Czas between %s and %s order by Czas DESC  LIMIT 1000", (datalist[2], datalist[3]))
             reply = 'true;HR_selByCat;'
             for row in conndb.fetchall():
                 reply += str(row[0])+';'+str(row[1])+';'+str(row[2])+';'+str(row[3])+';'+str(row[4])+';'
@@ -1183,7 +1212,7 @@ def requestMethod(data):
             reply = 'true;SENSOR_clearhistory;'
         elif datalist[1] == 'SENSOR_refresh':
             value = updateSensorHistory(datalist[2],conndb)
-            if value == -999: reply = 'false;SENSOR_refresh;'+str(value)+";"
+            if value == None: reply = 'false;SENSOR_refresh;'+str(value)+";"
             else: reply = 'true;SENSOR_refresh;'+str(value)+";"
         elif datalist[1] == 'SENSORS_history':
             reply = 'true;SENSORS_history;'
@@ -1481,7 +1510,8 @@ if __name__ == '__main__':
             Id_Pwm    INTEGER,
             Stan    TEXT NOT NULL,
             Id_c    INTEGER,
-            Id_cmd    INTEGER
+            Id_cmd    INTEGER,
+            Id_a    INTEGER
         );
         CREATE TABLE IF NOT EXISTS sensory (
             Id    TEXT NOT NULL PRIMARY KEY UNIQUE,
@@ -1619,6 +1649,7 @@ if __name__ == '__main__':
     conndb.execute("ALTER TABLE akcje ADD COLUMN IF NOT EXISTS A_noe INTEGER;")
     conndb.execute("ALTER TABLE spoiwaLancuchow ADD COLUMN IF NOT EXISTS C_ec INTEGER;")
     conndb.execute("ALTER TABLE akcje ADD COLUMN IF NOT EXISTS Chain_ec INTEGER;")
+    conndb.execute("ALTER TABLE historia ADD COLUMN IF NOT EXISTS Id_a INTEGER;")
 
     log.info('Server local time: '+datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f'))
     startTime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
@@ -1752,6 +1783,37 @@ if __name__ == '__main__':
             else:
                 if log: conndb.execute("INSERT INTO rfHistoria(Id,PulseLength,Protocol,BitLength) VALUES(%s,%s,%s,%s)", (id,row[4],row[5],row[7]))
                 return sendCodeProcess
+    if parser.has_option('sensors','PMS7003'):
+        if parser.getboolean('sensors','PMS7003'):
+            from PMS7003 import PMS7003
+            pms7003 = PMS7003(parser.getboolean('sensors','PMS7003passiveMode'),parser.get('sensors','PMS7003serialPort'),parser.getboolean('sensors','PMS7003factoryPMvalues'),parser.getboolean('sensors','PMS7003atmosphericPMvalues'),parser.getboolean('sensors','PMS7003particleCount'))
+            if pms7003.serialPort.isOpen(): 
+                if pms7003.factoryPMvalues:
+                    conndb.execute("INSERT INTO sensory(Name,Id,Type,Unit,Data_name) VALUES(%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", ('PM1 Factory concentration','concPM1_0_CF1', "PMS7003", "ug/m3", "air quality"))
+                    conndb.execute("INSERT INTO sensory(Name,Id,Type,Unit,Data_name) VALUES(%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", ('PM2.5 Factory concentration','concPM2_5_CF1', "PMS7003", "ug/m3", "air quality"))
+                    conndb.execute("INSERT INTO sensory(Name,Id,Type,Unit,Data_name) VALUES(%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", ('PM10 Factory concentration','concPM10_0_CF1', "PMS7003", "ug/m3", "air quality"))
+                if pms7003.atmosphericPMvalues:
+                    conndb.execute("INSERT INTO sensory(Name,Id,Type,Unit,Data_name) VALUES(%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", ('PM1 Atmospheric concentration','concPM1_0_ATM', "PMS7003", "ug/m3", "air quality"))
+                    conndb.execute("INSERT INTO sensory(Name,Id,Type,Unit,Data_name) VALUES(%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", ('PM2.5 Atmospheric concentration','concPM2_5_ATM', "PMS7003", "ug/m3", "air quality"))
+                    conndb.execute("INSERT INTO sensory(Name,Id,Type,Unit,Data_name) VALUES(%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", ('PM10 Atmospheric concentration','concPM10_0_ATM', "PMS7003", "ug/m3", "air quality"))
+                if pms7003.particleCount:
+                    conndb.execute("INSERT INTO sensory(Name,Id,Type,Unit,Data_name) VALUES(%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", ('Particle count (diameter 0.3 um)','rawGt0_3um', "PMS7003", "per 0.1l", "air quality"))
+                    conndb.execute("INSERT INTO sensory(Name,Id,Type,Unit,Data_name) VALUES(%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", ('Particle count (diameter 0.5 um)','rawGt0_5um', "PMS7003", "per 0.1l", "air quality"))
+                    conndb.execute("INSERT INTO sensory(Name,Id,Type,Unit,Data_name) VALUES(%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", ('Particle count (diameter 1.0 um)','rawGt1_0um', "PMS7003", "per 0.1l", "air quality"))
+                    conndb.execute("INSERT INTO sensory(Name,Id,Type,Unit,Data_name) VALUES(%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", ('Particle count (diameter 2.5 um)','rawGt2_5um', "PMS7003", "per 0.1l", "air quality"))
+                    conndb.execute("INSERT INTO sensory(Name,Id,Type,Unit,Data_name) VALUES(%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", ('Particle count (diameter 5.0 um)','rawGt5_0um', "PMS7003", "per 0.1l", "air quality"))
+                    conndb.execute("INSERT INTO sensory(Name,Id,Type,Unit,Data_name) VALUES(%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", ('Particle count (diameter 10 um)','rawGt10_0um', "PMS7003", "per 0.1l", "air quality"))
+            else: log.error("Unable to open serial port")
+        else: conndb.execute("UPDATE sensory SET H_refresh_sec=0 WHERE Type LIKE 'PMS7003'")
+    else:
+        parser.set('sensors','PMS7003','no')
+        parser.set('sensors','PMS7003serialPort','/dev/serial0')
+        parser.set('sensors','PMS7003passiveMode','no')
+        parser.set('sensors','PMS7003factoryPMvalues','yes')
+        parser.set('sensors','PMS7003atmosphericPMvalues','yes')
+        parser.set('sensors','PMS7003particleCount','yes')
+        with open('rgc-config.ini', 'wb') as configfile:
+            parser.write(configfile)
 
     sensors_timers = {}
     sensors_timers_const = {}
@@ -1760,7 +1822,7 @@ if __name__ == '__main__':
         cdb.execute("SELECT * from sensory s WHERE Id = %s", (id,))
         row = cdb.fetchone()
         value = getCurrentSensorValue(id,cdb)
-        if value != -999: cdb.execute("INSERT INTO sensoryHistoria(Id,Value) VALUES(%s,%s)",(row[0], value))
+        if value != None: cdb.execute("INSERT INTO sensoryHistoria(Id,Value) VALUES(%s,%s)",(row[0], value))
         return value
 
     def getCurrentSensorValue(id,cdb):
@@ -1770,6 +1832,7 @@ if __name__ == '__main__':
             if row[4] == 'ds18b20':
                 return DS.tempC_byDeviceName(row[0])
             elif row[4] == 'dht':
+                time.sleep(1)
                 if row[8] == 'temperature':
                     return round(float(Adafruit_DHT.read_retry(int(row[6]), int(row[7]))[1]),2)
                 elif row[8] == 'humidity':
@@ -1782,13 +1845,22 @@ if __name__ == '__main__':
             elif row[4] == 'range_sensor':
                 global RANGE_SENSORS
                 return getRSdistance(RANGE_SENSORS[row[0]][0],RANGE_SENSORS[row[0]][1],RANGE_SENSORS[row[0]][2])
+            elif row[4] == 'PMS7003':
+                refreshTime = 30 if parser.getboolean('sensors', 'PMS7003passiveMode') else 3
+                if pms7003.lastRead == None:
+                    pms7003.readValues()
+                elif (time.time() - pms7003.lastRead) > refreshTime:
+                    pms7003.readValues()
+                if pms7003.lastValues['err']: log.error(pms7003.lastValues['errMessage'])
+                return pms7003.lastValues[row[0]]
             elif row[4] == 'custom':
                 execCmd = execCustomCmd(cdb,row[9],'',False,True)
                 if execCmd[0]: return float(execCmd[1])
                 else: raise ValueError(execCmd[1])
         except Exception as e:
+            print(e.message)
             log.error(e.message)
-            return -999
+            return None
 
     def sensorLoop():
         startTime = time.time()
@@ -1849,8 +1921,9 @@ if __name__ == '__main__':
         serverHTTP.allow_reuse_address = True
         serverHTTP_thread = threading.Thread(target=serverHTTP.serve_forever)
         serverHTTP_thread.daemon = True
-        conndb.execute("SELECT * from sensory s")
-        for row in conndb.fetchall(): updateSensorHistory(row[0],conndb)
+        conndb.execute("SELECT Id,(SELECT Value from sensoryHistoria h WHERE h.Id=s.Id ORDER BY Timestamp DESC LIMIT 1) from sensory s")
+        for row in conndb.fetchall(): 
+            if not row[1]: updateSensorHistory(row[0],conndb)
         services_th = threading.Thread(target=services)
         services_th.daemon = True
         services_th.start()
