@@ -128,6 +128,12 @@
 </li>
 
                         
+                            
+<li >
+    <a href="../PMS7003/">Dust sensor PMS7003</a>
+</li>
+
+                        
                         </ul>
                     </li>
                 
@@ -240,6 +246,12 @@ rangeSensor = no
 rangeSensorTrigger = -1
 rangeSensorEcho = -1
 rangeSensorMaxValue = 340
+pms7003 = no
+pms7003serialport = /dev/serial0
+pms7003passivemode = no
+pms7003factorypmvalues = yes
+pms7003atmosphericpmvalues = yes
+pms7003particlecount = yes
 </code></pre>
 <p><code>ds18b20</code> all conected to 1wire <code>yes</code> or <code>no</code><br />
 <code>dhtType</code> 11 or 22 or AM2302 (comma separated for more)<br />
@@ -251,7 +263,12 @@ rangeSensorMaxValue = 340
 <code>rotaryEncoderMin</code> min value of counter (comma separated for more)<br />
 <code>rangeSensorTrigger</code> GPIO BCM PIN number<br />
 <code>rangeSensorEcho</code> GPIO BCM PIN number<br />
-<code>rangeSensorMaxValue</code> value in cm  </p>
+<code>rangeSensorMaxValue</code> value in cm <br />
+<code>pms7003serialport</code> path to serial port <br />
+<code>pms7003passivemode</code> if enabled sensor wakesup only for read command  <br />
+<code>pms7003factorypmvalues</code> to store factory concentration <br />
+<code>pms7003atmosphericpmvalues</code> to store atmospheric concentration  <br />
+<code>pms7003particlecount</code> to store particle counts   </p>
 <h2 id="radio-frequency">Radio frequency</h2>
 <pre><code class="language-ini">[rf]
 reciver = no

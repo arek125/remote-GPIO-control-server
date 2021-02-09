@@ -11,7 +11,7 @@
     <link rel="shortcut icon" href="../img/favicon.ico">
 
     
-    <title>Range sensor HC-SR04 - Remote GPIO control</title>
+    <title>Dust sensor PMS7003 - Remote GPIO control</title>
     
 
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
@@ -117,8 +117,8 @@
 
                         
                             
-<li class="active">
-    <a href="./">Range sensor HC-SR04</a>
+<li >
+    <a href="../Range%20sensor/">Range sensor HC-SR04</a>
 </li>
 
                         
@@ -129,8 +129,8 @@
 
                         
                             
-<li >
-    <a href="../PMS7003/">Dust sensor PMS7003</a>
+<li class="active">
+    <a href="./">Dust sensor PMS7003</a>
 </li>
 
                         
@@ -165,17 +165,17 @@
                         </a>
                     </li>
                     <li >
-                        <a rel="prev" href="../Rotary%20encoder/">
+                        <a rel="prev" href="../RF/">
                             <i class="fas fa-arrow-left"></i> Previous
                         </a>
                     </li>
                     <li >
-                        <a rel="next" href="../RF/">
+                        <a rel="next" href="../usage/">
                             Next <i class="fas fa-arrow-right"></i>
                         </a>
                     </li>
                     <li>
-                        <a href="https://github.com/arek125/remote-GPIO-control-server/edit/master/docs/Range sensor.md"><i class="fab fa-github"></i> Edit on GitHub</a>
+                        <a href="https://github.com/arek125/remote-GPIO-control-server/edit/master/docs/PMS7003.md"><i class="fab fa-github"></i> Edit on GitHub</a>
                     </li>
             </ul>
         </div>
@@ -187,22 +187,34 @@
         
         <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
     <ul class="nav bs-sidenav">
-        <li class="first-level active"><a href="#range-sensor-hc-sr04">Range sensor HC-SR04</a></li>
     </ul>
 </div></div>
         <div class="col-md-9" role="main">
 
-<h1 id="range-sensor-hc-sr04">Range sensor HC-SR04</h1>
-<p>Connect sensor:
-<img alt="conn" src="../img/Distance-Sensor-Fritz.png" /></p>
-<ul>
-<li>VCC Connects to Pin 2 (5v)</li>
-<li>Trig Connects to Pin 7 (GPIO 4, Any other can be used)</li>
-<li>Echo Connects to R1 (1k Ω)</li>
-<li>R2 (2k Ω) Connects from R1 to Ground</li>
-<li>Wire from R1 and R2 connects to Pin 11 (GPIO 17, Any other can be used)</li>
-<li>GND connects to Pin 6 (Ground)</li>
-</ul>
+<p>Connect PMS7003 sensor directly to UART port or via USB adapter.</p>
+<pre><code class="language-bash">    sensor module  10 pin connector
+|----------------|   pin    n   G7
+||----|          | (pin 8) N/C red ------   not used
+||1  2|          | (pin 7) N/C black ----   not used
+||.  .|          | (pin 6) res yellow - left unused (or -&gt; 10K Ohm -&gt; 3V3 pin)
+||9 10|          | (pin 5) Tx  green --------&gt; Rx -----------\ USB/PI UART
+||----|          | (pin 4) Rx  blew  --------&gt; Tx -----------\ USB/PI UART
+|                | (pin 3) set white ---- left unused (or -&gt; 10K Ohm -&gt; 3V3 pin)
+|                | (pin 2) Gnd orange --------&gt; Gnd-----------/ USB/PI
+|                | (pin 1) 5V  purple --------&gt; 5V -----------/ USB/PI
+|----------------|
+</code></pre>
+<p>If connected directly to pi UART, then enable hadrware serial port and disable console:</p>
+<pre><code class="language-bash">sudo raspi-config
+</code></pre>
+<p>[5] Interfacing Options &gt; Serial section, disable the serial login shell and enable the serial interface.
+After reboot your active serial port probably is '/dev/serial0'</p>
+<p>If connected via USB adapter then your serial port is '/dev/ttyUSB0'</p>
+<p>Sensor have two modes active and passive:
+- in active mode fan spins all the time and single read takes about 2s
+- in passive mode sensor wakeup only for read, fan start spin before reading and stops after, single read takes about 40s </p>
+<pre><code class="language-bash">sudo pip install pyserial
+</code></pre>
 <p><a href="../serverConfig/">Enable and configure sensor in config file</a></p></div>
         
         
