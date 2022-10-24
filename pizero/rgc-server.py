@@ -476,7 +476,7 @@ def GPIOset(pinout, onoff):
     try:
         onoff = int(onoff)
     except ValueError:
-        print"Failure w/ value " + str(onoff)
+        print 'Failure w/ value ' + str(onoff)
     if onoff < 2:
         for pin in pins:
             pin = int(pin)
