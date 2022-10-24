@@ -473,11 +473,13 @@ def pwmChange(planed_ss,planned_dc,planned_fr,id,cdb,changedBy,log=True):
 
 def GPIOset(pinout, onoff):
     pins = pinout.split(",")
-    onoff = int(onoff)
+    try:
+        onoff = int(onoff)
+    except ValueError:
+        print"Failure w/ value " + str(onoff)
     if onoff < 2:
         for pin in pins:
             pin = int(pin)
-            #GPIO.setup(pin, GPIO.OUT)
             GPIO.output(pin, onoff)
 
 def GPIOInitOut(pinout):
